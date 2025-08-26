@@ -108,12 +108,13 @@ module "security" {
 # --------------------------
 
 module "ec2" {
-  source            = "./modules/ec2"           # path to EC2 module
-  project_name      = local.project_name         # used for naming EC2 instances
-  instance_type     = var.instance_type          # type of EC2 instances (t3.micro, etc.)
-  public_subnet_id  = module.vpc.public_subnet_id  # ID of public subnet for bastion
-  private_subnet_id = module.vpc.private_subnet_id # ID of private subnet for app server
-  bastion_sg_id     = module.security.bastion_sg_id  # security group for bastion host
-  app_server_sg_id  = module.security.app_server_sg_id # security group for app server
-  key_name          = module.security.key_name    # SSH key name to access EC2 instances
+  source                    = "./modules/ec2"           # path to EC2 module
+  project_name              = local.project_name         # used for naming EC2 instances
+  instance_type            = var.instance_type          # type of EC2 instances (t3.micro, etc.)
+  public_subnet_id         = module.vpc.public_subnet_id  # ID of public subnet for bastion
+  private_subnet_id        = module.vpc.private_subnet_id # ID of private subnet for app server
+  bastion_sg_id           = module.security.bastion_sg_id  # security group for bastion host
+  app_server_sg_id        = module.security.app_server_sg_id # security group for app server
+  key_name                = module.security.key_name    # SSH key name to access EC2 instances
+  iam_instance_profile_name = module.security.ec2_instance_profile_name # IAM instance profile for EC2 instances
 }

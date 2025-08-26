@@ -37,6 +37,11 @@ resource "aws_instance" "bastion" {
   # Source: Security module output
   # Reasoning: EC2 needs a key pair to allow SSH login
 
+  # VARIABLE: iam_instance_profile
+  iam_instance_profile = var.iam_instance_profile_name
+  # Source: Security module output
+  # Reasoning: Attach IAM role via instance profile for S3 and CloudWatch access
+
   # TAGS
   tags = {
     Name = "${var.project_name}-bastion"
@@ -67,6 +72,11 @@ resource "aws_instance" "app_server" {
 
   key_name               = var.key_name
   # Same SSH key as bastion for login
+
+  # VARIABLE: iam_instance_profile
+  iam_instance_profile = var.iam_instance_profile_name
+  # Source: Security module output
+  # Reasoning: Attach IAM role via instance profile for S3 and CloudWatch access
 
   tags = {
     Name = "${var.project_name}-app-server"

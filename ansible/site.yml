@@ -1,0 +1,123 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required system packages
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - docker.io
+        - python3
+        - python3-pip
+        - ufw
+        - fail2ban
+
+    - name: Install Docker Compose
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+      args:
+        creates: /usr/local/bin/docker-compose
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # UFW Configuration (commented out)
+    # - name: Configure UFW - allow SSH
+    #   ufw:
+    #     rule: allow
+    #     port: "22"
+    #     proto: tcp
+
+    # - name: Allow port 8000 for app server
+    #   ufw:
+    #     rule: allow
+    #     port: "8000"
+    #     proto: tcp
+    #   when: inventory_hostname in groups['app_server']
+
+    # - name: Enable UFW
+    #   ufw:
+    #     state: enabled
+    #     policy: deny
+
+    # Fail2Ban Configuration (commented out)
+    # - name: Configure Fail2Ban for SSH
+    #   copy:
+    #     content: |
+    #       [sshd]
+    #       enabled = true
+    #       port = ssh
+    #       filter = sshd
+    #       logpath = /var/log/auth.log
+    #       maxretry = 3
+    #       bantime = 600
+    #     dest: /etc/fail2ban/jail.d/sshd.local
+    #     owner: root
+    #     group: root
+    #     mode: 0644
+
+    # - name: Start and enable Fail2Ban service
+    #   systemd:
+    #     name: fail2ban
+    #     state: started
+    #     enabled: yes
+
+    - name: Create devops user without password (SSH key only)
+      user:
+        name: devops
+        groups: sudo,docker
+        shell: /bin/bash
+        append: yes
+
+    - name: Add SSH key to devops user
+      authorized_key:
+        user: devops
+        state: present
+        key: "{{ lookup('file', '~/.ssh/devopsproj.pub') }}"
+
+    - name: Disable root SSH login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+        state: present
+      notify: restart ssh
+
+    - name: Disable password authentication
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+        state: present
+      notify: restart ssh
+
+  handlers:
+    - name: restart ssh
+      service:
+        name: ssh
+        state: restarted
+
+- hosts: app_server
+  become: yes
+  tasks:
+    - name: Create app directory structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: devops
+        group: devops
+        mode: 0755
+      loop:
+        - /home/devops/apps/python-app
+        - /home/devops/apps/html-app
+        - /home/devops/apps/nginx

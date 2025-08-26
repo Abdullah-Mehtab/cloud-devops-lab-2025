@@ -122,3 +122,83 @@ resource "aws_security_group" "app_server" {
     Name = "${var.project_name}-app-server-sg"
   }
 }
+
+# --------------------------
+# IAM Resources
+# --------------------------
+
+# IAM role for EC2 instances
+resource "aws_iam_role" "ec2_role" {
+  name = "${var.project_name}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-ec2-role"
+  }
+}
+
+# IAM policy for S3 and CloudWatch access
+resource "aws_iam_policy" "ec2_policy" {
+  name        = "${var.project_name}-ec2-policy"
+  description = "Policy for EC2 to access S3 and CloudWatch"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:*",
+          "cloudwatch:*"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach policy to role
+resource "aws_iam_role_policy_attachment" "ec2_policy_attach" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.ec2_policy.arn
+}
+
+# IAM instance profile
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${var.project_name}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# --------------------------
+# SSM Parameters
+# --------------------------
+
+# SSM parameters for Jenkins credentials
+resource "random_password" "jenkins_password" {
+  length  = 16
+  special = true
+}
+
+resource "aws_ssm_parameter" "jenkins_user" {
+  name  = "/jenkins/user"
+  type  = "String"
+  value = "admin"
+}
+
+resource "aws_ssm_parameter" "jenkins_password" {
+  name  = "/jenkins/password"
+  type  = "SecureString"
+  value = random_password.jenkins_password.result
+}

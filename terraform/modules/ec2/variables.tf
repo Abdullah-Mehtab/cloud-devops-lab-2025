@@ -80,3 +80,14 @@ variable "key_name" {
   # Where used: key_name argument in both aws_instance.bastion and aws_instance.app_server
   # Source: Output from Security module (imported SSH key)
 }
+
+# --------------------------
+# VARIABLE: iam_instance_profile_name
+# --------------------------
+variable "iam_instance_profile_name" {
+  description = "IAM instance profile name"
+  type        = string
+  # Reasoning: Allows EC2 instances to assume IAM role for S3 and CloudWatch access
+  # Where used: iam_instance_profile argument in both aws_instance resources
+  # Source: Output from Security module
+}

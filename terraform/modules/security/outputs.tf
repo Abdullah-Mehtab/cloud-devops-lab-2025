@@ -41,3 +41,13 @@ output "key_name" {
   # Reasoning: EC2 instances need the key name to attach for SSH login
   # Where used: main.tf or EC2 module uses module.security.key_name when creating instances
 }
+
+# --------------------------
+# OUTPUT: ec2_instance_profile_name
+# --------------------------
+output "ec2_instance_profile_name" {
+  description = "IAM instance profile name"
+  value       = aws_iam_instance_profile.ec2_profile.name
+  # Reasoning: EC2 instances need this profile to assume the IAM role
+  # Where used: EC2 module uses this to attach IAM role to instances
+}

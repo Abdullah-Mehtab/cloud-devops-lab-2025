@@ -9,29 +9,6 @@ Chosen for Infrastructure as Code due to:
 - Declarative configuration syntax
 - State management capabilities
 
-## Terraform Architecture Decisions
-
-### Module Structure
-Used modular approach for better organization and reusability:
-- VPC module: Networking infrastructure
-- Security module: Security groups and key pairs
-- EC2 module: Instance provisioning
-
-### State Management
-- S3 backend with versioning for state persistence
-- DynamoDB for state locking to prevent conflicts
-- Encryption enabled for security
-
-### Networking Design
-- VPC with public and private subnets
-- NAT Gateway for outbound internet from private subnet
-- Restricted security groups following least privilege principle
-
-### Instance Selection
-- t3.micro instances: Free Tier eligible and cost-effective
-- Ubuntu 22.04 LTS: Stable and well-supported
-- Existing SSH key: Reuse instead of creating new key
-
 ### Ansible
 Selected for configuration management because:
 - Agentless architecture
@@ -44,3 +21,27 @@ Used for container orchestration for:
 - Simplified multi-container management
 - Development-production parity
 - Network isolation capabilities
+
+## Phase 2 & 3 Architecture Decisions
+
+### Terraform Design Choices
+- **Modular Structure**: Separate VPC, security, and EC2 modules for reusability
+- **State Management**: S3 backend with DynamoDB locking for team collaboration
+- **Networking**: NAT Gateway for cost-effective outbound internet from private subnet
+- **Instance Selection**: t3.micro instances for Free Tier compliance
+
+### Security Decisions
+- **Least Privilege**: Security groups allow only necessary ports (SSH and HTTP)
+- **IAM Roles**: EC2 instances use roles instead of hardcoded credentials
+- **SSM Parameter Store**: Secure storage for Jenkins credentials instead of hardcoding
+- **SSH Hardening**: Disabled root login and password authentication
+
+### Ansible Implementation
+- **Simplified Authentication**: SSH key-only access for devops user (more secure than passwords)
+- **Bastion Pattern**: Single entry point to private network for enhanced security
+- **Idempotent Configuration**: Ansible playbooks can be run multiple times safely
+
+### Cost Optimization
+- **Free Tier Resources**: t3.micro instances, minimal EBS storage
+- **Single NAT Gateway**: Shared across all private subnets to minimize costs
+- **On-Demand Pricing**: DynamoDB with PAY_PER_REQUEST billing
