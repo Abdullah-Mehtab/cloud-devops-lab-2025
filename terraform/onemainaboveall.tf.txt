@@ -1,0 +1,666 @@
+# - - - - - - - - -
+# MODULE: terraform
+# PURPOSE: Defines Terraform version constraints, provider requirements, and backend configuration
+# DETAILS: Sets up the Terraform environment with version requirements and configures an S3 backend for state management with DynamoDB locking. Ensures consistent provider usage for AWS resources.
+# USAGE: This block is executed during `terraform init` to configure the environment and backend.
+# ALTERNATIVES:
+#   - Use local backend for small projects (less reliable, no locking).
+#   - Use other backends like `azurerm` or `gcs` for non-AWS clouds.
+# SECURITY: Ensure the S3 bucket and DynamoDB table have restricted IAM policies to prevent unauthorized access.
+# COST: S3 and DynamoDB incur minimal costs for state storage and locking (cents/month for low usage).
+# VERIFICATION: Run `terraform init` and check S3 bucket `tf-state-554930853385-devops-project` and DynamoDB table `terraform-state-lock` in AWS Console (S3 -> Buckets, DynamoDB -> Tables).
+# NOTE: If moving from local to S3 backend, Terraform will prompt to migrate state (`migrate state? yes/no`). Always back up state before migration.
+terraform {
+  # Specifies the minimum Terraform version required to execute this configuration
+  # Ensures compatibility with the syntax and features used in this file
+  required_version = ">= 1.0.0"
+  
+  # Defines required providers and their versions for consistent resource management
+  required_providers {
+    aws = {
+      # Specifies the source of the AWS provider (HashiCorp's official provider)
+      source = "hashicorp/aws"
+      # Pins the provider version to approximately 5.x to avoid breaking changes
+      version = "~> 5.0"
+    }
+  }
+  
+  # Configures the S3 backend for storing Terraform state remotely
+  # PURPOSE: Stores the state file in an S3 bucket with DynamoDB locking to prevent concurrent modifications
+  # DETAILS: The state file is stored in the specified S3 bucket with the key `terraform.tfstate`. DynamoDB table is used for state locking to ensure safe concurrent operations.
+  # USAGE: Initialized with `terraform init`. State is stored in `s3://tf-state-554930853385-devops-project/terraform.tfstate`.
+  # ALTERNATIVES:
+  #   - Local backend (`backend "local"`) for single-user setups (no locking, less reliable).
+  #   - Other remote backends like `azurerm`, `gcs`, or `consul` for different cloud providers.
+  # SECURITY:
+  #   - Restrict S3 bucket access with IAM policies (e.g., `s3:GetObject`, `s3:PutObject` for Terraform user/role).
+  #   - Enable versioning on the S3 bucket to recover from accidental state overwrites.
+  #   - Ensure DynamoDB table has fine-grained IAM permissions (`dynamodb:PutItem`, `dynamodb:GetItem`).
+  # COST:
+  #   - S3 storage costs ~$0.023/GB/month; state files are typically small (<1MB).
+  #   - DynamoDB costs ~$1.25/WRR/month for locking; minimal for low usage.
+  # VERIFICATION:
+  #   - Run `terraform init` to initialize the backend; expect output: `Successfully configured the backend "s3"!`.
+  #   - Check S3 bucket in AWS Console: S3 -> Buckets -> tf-state-554930853385-devops-project.
+  #   - Check DynamoDB table in AWS Console: DynamoDB -> Tables -> terraform-state-lock.
+  backend "s3" {
+    bucket = "tf-state-554930853385-devops-project"
+    key = "terraform.tfstate"
+    region = "eu-north-1"
+    dynamodb_table = "terraform-state-lock"
+    encrypt = true
+  }
+}
+
+# - - - - - - - - -
+# MODULE: provider
+# PURPOSE: Configures the AWS provider with region and default tags
+# DETAILS: Sets the AWS region to `eu-north-1` and applies default tags to all AWS resources created by Terraform for consistent metadata.
+# USAGE: Used by all AWS resources in this configuration to specify the region and apply tags.
+# ALTERNATIVES:
+#   - Use multiple provider blocks with aliases for multi-region deployments.
+#   - Override region via CLI (`-var aws_region=...`) or environment variable (`AWS_REGION`).
+# SECURITY:
+#   - Ensure the IAM role/user has permissions for all actions in this configuration (e.g., `ec2:*`, `s3:*`, `dynamodb:*`).
+#   - Use AWS SSO or temporary credentials for better security.
+# COST: No direct cost for provider configuration; costs depend on resources created.
+# VERIFICATION: Run `terraform plan` and check that resources are targeted for `eu-north-1`. Verify tags in AWS Console (e.g., EC2 -> Instances -> Tags).
+provider "aws" {
+  region = "eu-north-1"
+  default_tags {
+    tags = {
+      Project = "devops-internship"
+      Environment = "dev"
+      ManagedBy = "terraform"
+    }
+  }
+}
+
+# - - - - - - - - -
+# MODULE: variables
+# PURPOSE: Defines input variables for reusable configuration values
+# DETAILS: Variables allow parameterization of the configuration, enabling overrides via CLI, `terraform.tfvars`, or environment variables.
+# USAGE: Variables are referenced throughout the configuration (e.g., `var.aws_region`, `var.vpc_cidr`).
+# ALTERNATIVES:
+#   - Hardcode values directly in resources (less flexible, error-prone).
+#   - Use locals for non-overridable constants.
+# SECURITY: Avoid storing sensitive data in variables; use AWS Secrets Manager or Parameter Store for secrets.
+# COST: No cost associated with variables.
+# VERIFICATION: Check `terraform plan` to ensure variable values are applied correctly.
+variable "aws_region" {
+  # VARIABLE: aws_region
+  # PURPOSE: Specifies the AWS region for resource deployment
+  # DETAILS: Determines where resources like VPC, subnets, and EC2 instances are created. Default is `eu-north-1`.
+  # USAGE: Referenced in resources like `aws_vpc`, `aws_subnet` (e.g., `${var.aws_region}a` for AZ).
+  # ALTERNATIVES:
+  #   - Use other regions like `us-east-1` for lower latency or specific service availability.
+  #   - Override via CLI: `terraform apply -var aws_region=us-west-2`.
+  # SECURITY: Ensure region supports required services; some services are region-specific.
+  # COST: Costs vary by region (e.g., `eu-north-1` is generally cheaper than `us-east-1`).
+  # VERIFICATION: Run `terraform plan` to confirm resources target `eu-north-1`.
+  description = "AWS region"
+  type = string
+  default = "eu-north-1"
+}
+
+variable "vpc_cidr" {
+  # VARIABLE: vpc_cidr
+  # PURPOSE: Defines the CIDR block for the VPC
+  # DETAILS: Sets the IP address range for the VPC, allowing up to 65,536 addresses with /16. Default is `10.0.0.0/16`.
+  # USAGE: Referenced in `aws_vpc.main` as `var.vpc_cidr`.
+  # ALTERNATIVES:
+  #   - Use a smaller CIDR (e.g., `10.0.0.0/24`) for fewer hosts (limits scalability).
+  #   - Use non-overlapping CIDR for multi-VPC setups.
+  # SECURITY: Ensure CIDR does not overlap with other networks (e.g., on-premises VPN).
+  # COST: No cost for CIDR selection; impacts subnet design.
+  # VERIFICATION: Check VPC CIDR in AWS Console: VPC -> Your VPCs -> CIDR Block.
+  description = "CIDR block for VPC"
+  type = string
+  default = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidr" {
+  # VARIABLE: public_subnet_cidr
+  # PURPOSE: Defines the CIDR block for the public subnet
+  # DETAILS: Allocates a subset of VPC CIDR for public resources like bastion hosts. Default is `10.0.1.0/24` (256 addresses).
+  # USAGE: Referenced in `aws_subnet.public` as `var.public_subnet_cidr`.
+  # ALTERNATIVES:
+  #   - Use a smaller CIDR (e.g., `10.0.1.0/28`) for fewer public IPs (limits scalability).
+  #   - Use multiple public subnets for high availability.
+  # SECURITY: Public subnet hosts should have tight security group rules.
+  # COST: No cost for CIDR; public IPs incur minor costs if allocated.
+  # VERIFICATION: Check subnet CIDR in AWS Console: VPC -> Subnets -> CIDR Block.
+  description = "CIDR block for public subnet"
+  type = string
+  default = "10.0.1.0/24"
+}
+
+variable "private_subnet_cidr" {
+  # VARIABLE: private_subnet_cidr
+  # PURPOSE: Defines the CIDR block for the private subnet
+  # DETAILS: Allocates a subset of VPC CIDR for private resources like app servers. Default is `10.0.2.0/24` (256 addresses).
+  # USAGE: Referenced in `aws_subnet.private` as `var.private_subnet_cidr`.
+  # ALTERNATIVES:
+  #   - Use a smaller CIDR (e.g., `10.0.2.0/28`) for fewer private IPs.
+  #   - Use multiple private subnets across AZs for high availability.
+  # SECURITY: Private subnet should restrict inbound access via security groups.
+  # COST: No cost for CIDR; NAT Gateway for outbound traffic incurs costs.
+  # VERIFICATION: Check subnet CIDR in AWS Console: VPC -> Subnets -> CIDR Block.
+  description = "CIDR block for private subnet"
+  type = string
+  default = "10.0.2.0/24"
+}
+
+variable "instance_type" {
+  # VARIABLE: instance_type
+  # PURPOSE: Specifies the EC2 instance type for bastion and app servers
+  # DETAILS: Defines the compute capacity (CPU, memory) for EC2 instances. Default is `t3.micro` (Free Tier eligible).
+  # USAGE: Referenced in `aws_instance.bastion` and `aws_instance.app_server` as `var.instance_type`.
+  # ALTERNATIVES:
+  #   - Use `t3.nano` for lower cost (less performance).
+  #   - Use `t3.medium` for higher performance (higher cost).
+  # SECURITY: Smaller instances reduce attack surface; ensure IAM roles are minimal.
+  # COST: `t3.micro` costs ~$0.0104/hour in `eu-north-1`; Free Tier eligible for 750 hours/month.
+  # VERIFICATION: Check instance type in AWS Console: EC2 -> Instances -> Instance Type.
+  description = "EC2 instance type"
+  type = string
+  default = "t3.micro"
+}
+
+variable "project_name" {
+  # VARIABLE: project_name
+  # PURPOSE: Provides a project identifier for consistent resource naming and tagging
+  # DETAILS: Used to tag resources and form names for consistency. Default is `devops-project`.
+  # USAGE: Referenced in resource tags (e.g., `Name = "${var.project_name}-vpc"`).
+  # ALTERNATIVES:
+  #   - Hardcode names (less maintainable).
+  #   - Use locals if not overridable.
+  # SECURITY: Avoid sensitive data in project names.
+  # COST: No cost; aids in cost tracking via tags.
+  # VERIFICATION: Check tags in AWS Console: EC2 -> Instances -> Tags.
+  description = "Project name for tagging"
+  type = string
+  default = "devops-project"
+}
+
+# - - - - - - - - -
+# MODULE: vpc
+# PURPOSE: Creates VPC and related networking resources
+# DETAILS: Provisions a VPC, public and private subnets, internet gateway, NAT gateway, and route tables for network connectivity.
+# USAGE: Resources like `aws_vpc.main.id` and `aws_subnet.public.id` are referenced by EC2 instances and security groups.
+# ALTERNATIVES:
+#   - Use default VPC for simpler setups (less customizable).
+#   - Use multiple AZs for high availability (increases complexity and cost).
+# SECURITY:
+#   - Ensure IAM role has permissions: `ec2:CreateVpc`, `ec2:CreateSubnet`, `ec2:CreateNatGateway`, etc.
+#   - Restrict public subnet access via NACLs and security groups.
+# COST:
+#   - VPC and subnets are free; NAT Gateway costs ~$0.045/hour in `eu-north-1`.
+#   - Use VPC endpoints to reduce data transfer costs to S3/DynamoDB.
+# VERIFICATION: Check AWS Console: VPC -> Your VPCs -> filter by `devops-project`.
+resource "aws_vpc" "main" {
+  # RESOURCE: aws_vpc.main
+  # PURPOSE: Creates a Virtual Private Cloud (VPC) for isolated networking
+  # DETAILS: Defines an isolated network with a specified CIDR block. Enables DNS support and hostnames for easier resource access.
+  # USAGE: Referenced as `aws_vpc.main.id` in subnets, gateways, and security groups.
+  # ALTERNATIVES:
+  #   - Use AWS default VPC (less control, preconfigured).
+  #   - Use smaller CIDR for fewer hosts (limits scalability).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateVpc`, `ec2:ModifyVpcAttribute`.
+  #   - Use NACLs to restrict traffic at the VPC level.
+  # COST: VPC is free; costs come from associated resources (e.g., NAT Gateway).
+  # VERIFICATION: Check AWS Console: VPC -> Your VPCs -> CIDR Block and Tags.
+  cidr_block = var.vpc_cidr
+  enable_dns_support = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "${var.project_name}-vpc"
+  }
+}
+
+resource "aws_subnet" "public" {
+  # RESOURCE: aws_subnet.public
+  # PURPOSE: Creates a public subnet for resources like bastion hosts
+  # DETAILS: Allocates a subset of VPC CIDR for public resources. Enables auto-assignment of public IPs for instances.
+  # USAGE: Referenced as `aws_subnet.public.id` in EC2 instances and NAT Gateway.
+  # ALTERNATIVES:
+  #   - Use multiple public subnets across AZs for high availability.
+  #   - Disable public IP assignment for stricter control (requires manual EIP).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateSubnet`.
+  #   - Restrict access via security groups and NACLs.
+  # COST: Subnets are free; public IPs incur minor costs if allocated.
+  # VERIFICATION: Check AWS Console: VPC -> Subnets -> filter by `devops-project-public-subnet`.
+  vpc_id = aws_vpc.main.id
+  cidr_block = var.public_subnet_cidr
+  availability_zone = "${var.aws_region}a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${var.project_name}-public-subnet"
+  }
+}
+
+resource "aws_subnet" "private" {
+  # RESOURCE: aws_subnet.private
+  # PURPOSE: Creates a private subnet for resources like application servers
+  # DETAILS: Allocates a subset of VPC CIDR for private resources with no direct internet access.
+  # USAGE: Referenced as `aws_subnet.private.id` in EC2 instances.
+  # ALTERNATIVES:
+  #   - Use multiple private subnets across AZs for high availability.
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateSubnet`.
+  #   - Ensure no public IPs; use NAT Gateway for outbound traffic.
+  # COST: Subnets are free; outbound traffic via NAT Gateway incurs costs.
+  # VERIFICATION: Check AWS Console: VPC -> Subnets -> filter by `devops-project-private-subnet`.
+  vpc_id = aws_vpc.main.id
+  cidr_block = var.private_subnet_cidr
+  availability_zone = "${var.aws_region}a"
+  tags = {
+    Name = "${var.project_name}-private-subnet"
+  }
+}
+
+resource "aws_internet_gateway" "main" {
+  # RESOURCE: aws_internet_gateway.main
+  # PURPOSE: Provides internet access for the VPC
+  # DETAILS: Attaches an internet gateway to the VPC for public subnet resources to access the internet.
+  # USAGE: Referenced as `aws_internet_gateway.main.id` in public route table.
+  # ALTERNATIVES:
+  #   - No internet gateway for fully private VPCs (limits functionality).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateInternetGateway`, `ec2:AttachInternetGateway`.
+  #   - Control access via route tables and security groups.
+  # COST: Internet gateways are free; data transfer costs apply.
+  # VERIFICATION: Check AWS Console: VPC -> Internet Gateways -> filter by `devops-project`.
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.project_name}-igw"
+  }
+}
+
+resource "aws_eip" "nat" {
+  # RESOURCE: aws_eip.nat
+  # PURPOSE: Allocates an Elastic IP for the NAT Gateway
+  # DETAILS: Provides a static public IP for the NAT Gateway to enable outbound internet access from private subnets.
+  # USAGE: Referenced as `aws_eip.nat.id` in `aws_nat_gateway.main`.
+  # ALTERNATIVES:
+  #   - Use NAT instance instead of NAT Gateway (cheaper, more management).
+  # SECURITY:
+  #   - IAM permissions: `ec2:AllocateAddress`.
+  #   - No direct security implications; EIP is for NAT Gateway.
+  # COST: EIP costs ~$0.005/hour when associated; free when unassociated.
+  # VERIFICATION: Check AWS Console: EC2 -> Elastic IPs -> filter by `devops-project`.
+  domain = "vpc"
+  tags = {
+    Name = "${var.project_name}-nat-eip"
+  }
+}
+
+resource "aws_nat_gateway" "main" {
+  # RESOURCE: aws_nat_gateway.main
+  # PURPOSE: Enables outbound internet access for private subnet resources
+  # DETAILS: Routes traffic from private subnets to the internet via an Elastic IP in the public subnet.
+  # USAGE: Referenced as `aws_nat_gateway.main.id` in private route table.
+  # ALTERNATIVES:
+  #   - Use NAT instance (cheaper, requires manual setup and maintenance).
+  #   - No NAT Gateway for fully isolated private subnets (no internet access).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateNatGateway`.
+  #   - Ensure public subnet security groups restrict inbound traffic.
+  # COST: NAT Gateway costs ~$0.045/hour in `eu-north-1` plus data transfer.
+  # VERIFICATION: Check AWS Console: VPC -> NAT Gateways -> filter by `devops-project`.
+  allocation_id = aws_eip.nat.id
+  subnet_id = aws_subnet.public.id
+  tags = {
+    Name = "${var.project_name}-nat-gw"
+  }
+  depends_on = [aws_internet_gateway.main]
+}
+
+resource "aws_route_table" "public" {
+  # RESOURCE: aws_route_table.public
+  # PURPOSE: Defines routing rules for the public subnet
+  # DETAILS: Routes all outbound traffic (0.0.0.0/0) to the internet gateway for public subnet resources.
+  # USAGE: Associated with public subnet via `aws_route_table_association.public`.
+  # ALTERNATIVES:
+  #   - Custom routes for specific destinations (more granular control).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateRouteTable`, `ec2:CreateRoute`.
+  #   - Use NACLs for additional traffic filtering.
+  # COST: Route tables are free; data transfer costs apply.
+  # VERIFICATION: Check AWS Console: VPC -> Route Tables -> filter by `devops-project-public-rt`.
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+  tags = {
+    Name = "${var.project_name}-public-rt"
+  }
+}
+
+resource "aws_route_table" "private" {
+  # RESOURCE: aws_route_table.private
+  # PURPOSE: Defines routing rules for the private subnet
+  # DETAILS: Routes all outbound traffic (0.0.0.0/0) to the NAT Gateway for private subnet resources.
+  # USAGE: Associated with private subnet via `aws_route_table_association.private`.
+  # ALTERNATIVES:
+  #   - Direct routes to specific services via VPC endpoints (reduces NAT costs).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateRouteTable`, `ec2:CreateRoute`.
+  #   - Ensure NAT Gateway security group restricts unnecessary traffic.
+  # COST: Route tables are free; NAT Gateway incurs costs.
+  # VERIFICATION: Check AWS Console: VPC -> Route Tables -> filter by `devops-project-private-rt`.
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+  tags = {
+    Name = "${var.project_name}-private-rt"
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  # RESOURCE: aws_route_table_association.public
+  # PURPOSE: Associates the public route table with the public subnet
+  # DETAILS: Ensures public subnet traffic follows the public route table rules.
+  # USAGE: Links `aws_subnet.public.id` to `aws_route_table.public.id`.
+  # ALTERNATIVES:
+  #   - No association (subnet uses default route table, less control).
+  # SECURITY: IAM permissions: `ec2:AssociateRouteTable`.
+  # COST: Free.
+  # VERIFICATION: Check AWS Console: VPC -> Subnets -> Route Table.
+  subnet_id = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  # RESOURCE: aws_route_table_association.private
+  # PURPOSE: Associates the private route table with the private subnet
+  # DETAILS: Ensures private subnet traffic follows the private route table rules (via NAT Gateway).
+  # USAGE: Links `aws_subnet.private.id` to `aws_route_table.private.id`.
+  # ALTERNATIVES:
+  #   - No association (subnet uses default route table, less control).
+  # SECURITY: IAM permissions: `ec2:AssociateRouteTable`.
+  # COST: Free.
+  # VERIFICATION: Check AWS Console: VPC -> Subnets -> Route Table.
+  subnet_id = aws_subnet.private.id
+  route_table_id = aws_route_table.private.id
+}
+
+# - - - - - - - - -
+# MODULE: security
+# PURPOSE: Configures security groups and key pairs for secure access
+# DETAILS: Creates an SSH key pair and security groups for bastion host and application server with restricted access rules.
+# USAGE: Security group IDs (`aws_security_group.bastion.id`) and key pair (`aws_key_pair.devops_key.key_name`) are used by EC2 instances.
+# ALTERNATIVES:
+#   - Use default security groups (less secure, not recommended).
+#   - Use AWS Systems Manager Session Manager instead of SSH (no key pairs needed).
+# SECURITY:
+#   - IAM permissions: `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`, `ec2:CreateKeyPair`.
+#   - Restrict ingress rules to specific CIDRs for least privilege.
+#   - TODO: Store SSH private key in AWS Secrets Manager or SSM Parameter Store.
+# COST: Security groups and key pairs are free.
+# VERIFICATION: Check AWS Console: EC2 -> Security Groups -> filter by `devops-project`.
+resource "aws_key_pair" "devops_key" {
+  # RESOURCE: aws_key_pair.devops_key
+  # PURPOSE: Imports an SSH public key for EC2 instance access
+  # DETAILS: Uses an existing public key file for secure SSH access to EC2 instances.
+  # USAGE: Referenced as `aws_key_pair.devops_key.key_name` in `aws_instance` resources.
+  # ALTERNATIVES:
+  #   - Generate a new key pair via AWS (`aws ec2 create-key-pair`).
+  #   - Use AWS Systems Manager Session Manager (no SSH keys needed).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateKeyPair`.
+  #   - TODO: Store private key securely in a vault (e.g., AWS Secrets Manager).
+  # COST: Free.
+  # VERIFICATION: Check AWS Console: EC2 -> Key Pairs -> filter by `devops-proj-key`.
+  key_name = "devops-proj-key"
+  public_key = file("~/.ssh/devopsproj.pub")
+  tags = {
+    Name = "${var.project_name}-ssh-key"
+  }
+}
+
+resource "aws_security_group" "bastion" {
+  # RESOURCE: aws_security_group.bastion
+  # PURPOSE: Defines network access rules for the bastion host
+  # DETAILS: Allows SSH (port 22) from anywhere and unrestricted outbound traffic.
+  # USAGE: Referenced as `aws_security_group.bastion.id` in `aws_instance.bastion`.
+  # ALTERNATIVES:
+  #   - Restrict SSH to specific CIDR (e.g., company VPN) for tighter security.
+  #   - Use AWS Systems Manager for access (no public SSH).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`.
+  #   - Restrict `0.0.0.0/0` to specific IPs for least privilege.
+  # COST: Free.
+  # VERIFICATION: Check AWS Console: EC2 -> Security Groups -> filter by `devops-project-bastion-sg`.
+  name = "${var.project_name}-bastion-sg"
+  description = "Security group for bastion host"
+  vpc_id = aws_vpc.main.id
+  ingress {
+    description = "SSH from anywhere"
+    from_port = 22
+    to_port = 22
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "${var.project_name}-bastion-sg"
+  }
+}
+
+resource "aws_security_group" "app_server" {
+  # RESOURCE: aws_security_group.app_server
+  # PURPOSE: Defines network access rules for the application server
+  # DETAILS: Allows SSH (port 22) from the bastion host and HTTP (port 8000) from anywhere; unrestricted outbound traffic.
+  # USAGE: Referenced as `aws_security_group.app_server.id` in `aws_instance.app_server`.
+  # ALTERNATIVES:
+  #   - Restrict HTTP to specific CIDRs or use an ALB with WAF.
+  #   - Use port 80 instead of 8000 for standard HTTP (requires app changes).
+  # SECURITY:
+  #   - IAM permissions: `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`.
+  #   - Restrict HTTP access to specific IPs or use a load balancer.
+  # COST: Free.
+  # VERIFICATION: Check AWS Console: EC2 -> Security Groups -> filter by `devops-project-app-server-sg`.
+  name = "${var.project_name}-app-server-sg"
+  description = "Security group for application server"
+  vpc_id = aws_vpc.main.id
+  ingress {
+    description = "SSH from bastion"
+    from_port = 22
+    to_port = 22
+    protocol = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+  ingress {
+    description = "HTTP for Flask app"
+    from_port = 8000
+    to_port = 8000
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "${var.project_name}-app-server-sg"
+  }
+}
+
+# - - - - - - - - -
+# MODULE: ec2
+# PURPOSE: Provisions EC2 instances for bastion and application servers
+# DETAILS: Creates a bastion host in the public subnet and an application server in the private subnet using Ubuntu AMIs.
+# USAGE: Instances reference security groups, subnets, and key pairs for secure deployment.
+# ALTERNATIVES:
+#   - Use Auto Scaling Groups for dynamic scaling (more complex).
+#   - Use ECS/EKS for containerized workloads (requires app changes).
+# SECURITY:
+#   - IAM permissions: `ec2:RunInstances`, `ec2:DescribeImages`.
+#   - Use IAM instance profiles instead of embedded credentials.
+#   - Restrict SSH access to bastion via security group.
+# COST:
+#   - `t3.micro` instances cost ~$0.0104/hour in `eu-north-1`; Free Tier eligible.
+#   - Use Spot Instances or Savings Plans to reduce costs.
+# VERIFICATION: Check AWS Console: EC2 -> Instances -> filter by `devops-project`.
+data "aws_ami" "ubuntu" {
+  # RESOURCE: data.aws_ami.ubuntu
+  # PURPOSE: Fetches the latest Ubuntu 22.04 AMI for EC2 instances
+  # DETAILS: Queries AWS for the most recent Ubuntu Jammy 22.04 AMD64 server image from Canonical.
+  # USAGE: Referenced as `data.aws_ami.ubuntu.id` in `aws_instance` resources.
+  # ALTERNATIVES:
+  #   - Use Amazon Linux 2 for lower maintenance (different package ecosystem).
+  #   - Hardcode AMI ID (risks obsolescence).
+  # SECURITY: IAM permissions: `ec2:DescribeImages`.
+  # COST: Free; costs depend on EC2 instance usage.
+  # VERIFICATION: Check AMI ID in AWS Console: EC2 -> Instances -> AMI ID.
+  most_recent = true
+  owners = ["099720109477"] # Canonical
+  filter {
+    name = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+  filter {
+    name = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+resource "aws_instance" "bastion" {
+  # RESOURCE: aws_instance.bastion
+  # PURPOSE: Provisions a bastion host for secure access to private resources
+  # DETAILS: Creates a `t3.micro` instance in the public subnet with SSH access via a key pair.
+  # USAGE: Referenced as `aws_instance.bastion.public_ip` in outputs.
+  # ALTERNATIVES:
+  #   - Use AWS Systems Manager Session Manager (no public IP needed).
+  #   - Use larger instance type for more compute (higher cost).
+  # SECURITY:
+  #   - IAM permissions: `ec2:RunInstances`.
+  #   - Restrict security group to specific CIDRs for SSH.
+  # COST: `t3.micro` costs ~$0.0104/hour; Free Tier eligible.
+  # VERIFICATION: Check AWS Console: EC2 -> Instances -> filter by `devops-project-bastion`.
+  ami = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
+  subnet_id = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+  key_name = aws_key_pair.devops_key.key_name
+  tags = {
+    Name = "${var.project_name}-bastion"
+  }
+}
+
+resource "aws_instance" "app_server" {
+  # RESOURCE: aws_instance.app_server
+  # PURPOSE: Provisions an application server in the private subnet
+  # DETAILS: Creates a `t3.micro` instance for hosting a Flask app, accessible via SSH from the bastion and HTTP on port 8000.
+  # USAGE: Referenced as `aws_instance.app_server.private_ip` in outputs.
+  # ALTERNATIVES:
+  #   - Use ECS/Fargate for containerized apps (more scalable).
+  #   - Use larger instance type for more compute (higher cost).
+  # SECURITY:
+  #   - IAM permissions: `ec2:RunInstances`.
+  #   - Restrict HTTP access to specific CIDRs or use an ALB.
+  # COST: `t3.micro` costs ~$0.0104/hour; Free Tier eligible.
+  # VERIFICATION: Check AWS Console: EC2 -> Instances -> filter by `devops-project-app-server`.
+  ami = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
+  subnet_id = aws_subnet.private.id
+  vpc_security_group_ids = [aws_security_group.app_server.id]
+  key_name = aws_key_pair.devops_key.key_name
+  tags = {
+    Name = "${var.project_name}-app-server"
+  }
+}
+
+# - - - - - - - - -
+# MODULE: outputs
+# PURPOSE: Exports key resource attributes for external use
+# DETAILS: Outputs VPC, subnet, and instance details for use in other configurations or scripts.
+# USAGE: Accessed via `terraform output` or referenced in other modules (e.g., `module.ec2.bastion_public_ip`).
+# ALTERNATIVES:
+#   - Store outputs in SSM Parameter Store for automation.
+#   - Reduce outputs to only essential values (less exposure).
+# SECURITY: Avoid outputting sensitive data (e.g., secrets).
+# COST: Free.
+# VERIFICATION: Run `terraform output` to view values.
+output "vpc_id" {
+  # OUTPUT: vpc_id
+  # PURPOSE: Exports the VPC ID for external reference
+  # DETAILS: Provides the ID of the created VPC for use in other modules or scripts.
+  # USAGE: Accessed via `terraform output vpc_id` or in other modules as `module.vpc.vpc_id`.
+  # VERIFICATION: Check AWS Console: VPC -> Your VPCs -> VPC ID.
+  description = "VPC ID"
+  value = aws_vpc.main.id
+}
+
+output "public_subnet_id" {
+  # OUTPUT: public_subnet_id
+  # PURPOSE: Exports the public subnet ID
+  # DETAILS: Provides the ID of the public subnet for reference in other configurations.
+  # USAGE: Accessed via `terraform output public_subnet_id`.
+  # VERIFICATION: Check AWS Console: VPC -> Subnets -> Subnet ID.
+  description = "Public subnet ID"
+  value = aws_subnet.public.id
+}
+
+output "private_subnet_id" {
+  # OUTPUT: private_subnet_id
+  # PURPOSE: Exports the private subnet ID
+  # DETAILS: Provides the ID of the private subnet for reference in other configurations.
+  # USAGE: Accessed via `terraform output private_subnet_id`.
+  # VERIFICATION: Check AWS Console: VPC -> Subnets -> Subnet ID.
+  description = "Private subnet ID"
+  value = aws_subnet.private.id
+}
+
+output "bastion_public_ip" {
+  # OUTPUT: bastion_public_ip
+  # PURPOSE: Exports the public IP of the bastion host
+  # DETAILS: Provides the IP for SSH access to the bastion host.
+  # USAGE: Accessed via `terraform output bastion_public_ip` for SSH commands.
+  # VERIFICATION: Check AWS Console: EC2 -> Instances -> Public IP.
+  description = "Bastion host public IP"
+  value = aws_instance.bastion.public_ip
+}
+
+output "app_server_private_ip" {
+  # OUTPUT: app_server_private_ip
+  # PURPOSE: Exports the private IP of the application server
+  # DETAILS: Provides the IP for internal access (e.g., via bastion SSH).
+  # USAGE: Accessed via `terraform output app_server_private_ip`.
+  # VERIFICATION: Check AWS Console: EC2 -> Instances -> Private IP.
+  description = "Application server private IP"
+  value = aws_instance.app_server.private_ip
+}
+
+output "bastion_instance_id" {
+  # OUTPUT: bastion_instance_id
+  # PURPOSE: Exports the instance ID of the bastion host
+  # DETAILS: Provides the unique ID for tracking or managing the bastion instance.
+  # USAGE: Accessed via `terraform output bastion_instance_id`.
+  # VERIFICATION: Check AWS Console: EC2 -> Instances -> Instance ID.
+  description = "Bastion instance ID"
+  value = aws_instance.bastion.id
+}
+
+output "app_server_instance_id" {
+  # OUTPUT: app_server_instance_id
+  # PURPOSE: Exports the instance ID of the application server
+  # DETAILS: Provides the unique ID for tracking or managing the app server instance.
+  # USAGE: Accessed via `terraform output app_server_instance_id`.
+  # VERIFICATION: Check AWS Console: EC2 -> Instances -> Instance ID.
+  description = "Application server instance ID"
+  value = aws_instance.app_server.id
+}

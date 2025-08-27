@@ -1,0 +1,19 @@
+---
+- hosts: all
+  become: yes
+  vars:
+    devops_password_hash: "$6$A2dm6Oi8.tstSIH4$Z3bH02K7r9YJUsZJlfqiHl5MAsSbtr3fg1V0pM590DwZkILWRjbvP3/vbRKsHU.v6wbHdYEeavjuzXG8lcj26/a"
+  tasks:
+    - name: Create devops user with pre-hashed password
+      user:
+        name: devops
+        password: "{{ devops_password_hash }}"
+        groups: sudo,docker
+        shell: /bin/bash
+        append: yes
+
+    - name: Add SSH key to devops user
+      authorized_key:
+        user: devops
+        state: present
+        key: "{{ lookup('file', '~/.ssh/devopsproj.pub') }}"

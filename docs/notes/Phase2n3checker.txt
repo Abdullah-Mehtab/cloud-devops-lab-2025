@@ -1,0 +1,290 @@
+Verify and save to your memory if everything ran sucessfuly and also tell me. Then give me the updated final documentations update as well as proper git commands
+
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025/ansible$ cd ..
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws ec2 describe-vpcs --vpc-ids vpc-04a579c1816faf266 --query "Vpcs[].CidrBlock"
+[
+    "10.0.0.0/16"
+]
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws ec2 describe-subnets --filters "Name=vpc-id,Values=vpc-04a579c1816faf266" --query "Subnets[].{ID:SubnetId,CIDR:CidrBlock,Public:MapPublicIpOnLaunch}"
+[
+    {
+        "ID": "subnet-06e6d1d92dcdf4b11",
+        "CIDR": "10.0.2.0/24",
+        "Public": false
+    },
+    {
+        "ID": "subnet-0dbffc9cf2300e1cb",
+        "CIDR": "10.0.1.0/24",
+        "Public": true
+    }
+]
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=vpc-04a579c1816faf266"
+{
+    "NatGateways": [
+        {
+            "CreateTime": "2025-08-26T01:29:54+00:00",
+            "NatGatewayAddresses": [
+                {
+                    "AllocationId": "eipalloc-0aa4ede3d07690e96",
+                    "NetworkInterfaceId": "eni-0b7a5008a08a8deb7",
+                    "PrivateIp": "10.0.1.251",
+                    "PublicIp": "13.60.126.146",
+                    "AssociationId": "eipassoc-0653916a492bdd87c",
+                    "IsPrimary": true,
+                    "Status": "succeeded"
+                }
+            ],
+            "NatGatewayId": "nat-0a478a94c350ee4ae",
+            "State": "available",
+            "SubnetId": "subnet-0dbffc9cf2300e1cb",
+            "VpcId": "vpc-04a579c1816faf266",
+            "Tags": [
+                {
+                    "Key": "Project",
+                    "Value": "devops-internship"
+                },
+                {
+                    "Key": "Environment",
+                    "Value": "dev"
+                },
+                {
+                    "Key": "ManagedBy",
+                    "Value": "terraform"
+                },
+                {
+                    "Key": "Name",
+                    "Value": "devops-project-nat-gw"
+                }
+            ],
+            "ConnectivityType": "public"
+        }
+    ]
+}
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=vpc-04a579c1816faf266"
+{
+    "InternetGateways": [
+        {
+            "Attachments": [
+                {
+                    "State": "available",
+                    "VpcId": "vpc-04a579c1816faf266"
+                }
+            ],
+            "InternetGatewayId": "igw-0bedd6f61103c6c66",
+            "OwnerId": "554930853385",
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": "devops-project-igw"
+                },
+                {
+                    "Key": "Project",
+                    "Value": "devops-internship"
+                },
+                {
+                    "Key": "Environment",
+                    "Value": "dev"
+                },
+                {
+                    "Key": "ManagedBy",
+                    "Value": "terraform"
+                }
+            ]
+        }
+    ]
+}
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws ec2 describe-instances --filters "Name=tag:Project,Values=devops-internship" --query "Reservations[].Instances[].{InstanceId:InstanceId,PublicIp:PublicIpAddress,PrivateIp:PrivateIpAddress,Name:Tags[?Key=='Name']|[0].Value}"
+[
+    {
+        "InstanceId": "i-067938da9473ac57c",
+        "PublicIp": "13.61.153.223",
+        "PrivateIp": "10.0.1.20",
+        "Name": "devops-project-bastion"
+    },
+    {
+        "InstanceId": "i-0a0ae35c9097a7647",
+        "PublicIp": null,
+        "PrivateIp": "10.0.2.168",
+        "Name": "devops-project-app-server"
+    }
+]
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws s3 ls s3://tf-state-554930853385-devops-project/
+2025-08-26 12:35:24      47763 terraform.tfstate
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws dynamodb describe-table --table-name terraform-state-lock --region eu-north-1
+{
+    "Table": {
+        "AttributeDefinitions": [
+            {
+                "AttributeName": "LockID",
+                "AttributeType": "S"
+            }
+        ],
+        "TableName": "terraform-state-lock",
+        "KeySchema": [
+            {
+                "AttributeName": "LockID",
+                "KeyType": "HASH"
+            }
+        ],
+        "TableStatus": "ACTIVE",
+        "CreationDateTime": "2025-08-26T04:31:09.829000+05:00",
+        "ProvisionedThroughput": {
+            "NumberOfDecreasesToday": 0,
+            "ReadCapacityUnits": 0,
+            "WriteCapacityUnits": 0
+        },
+        "TableSizeBytes": 102,
+        "ItemCount": 1,
+        "TableArn": "arn:aws:dynamodb:eu-north-1:554930853385:table/terraform-state-lock",
+        "TableId": "a0b30c69-f2e2-4ca5-b721-bd8ee5dc6a37",
+        "BillingModeSummary": {
+            "BillingMode": "PAY_PER_REQUEST",
+            "LastUpdateToPayPerRequestDateTime": "2025-08-26T04:31:09.829000+05:00"
+        },
+        "DeletionProtectionEnabled": false,
+        "WarmThroughput": {
+            "ReadUnitsPerSecond": 12000,
+            "WriteUnitsPerSecond": 4000,
+            "Status": "ACTIVE"
+        }
+    }
+}
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws ec2 describe-security-groups --group-ids sg-06b8a82e8d1fccc87 sg-0e6583775e0a2522b --query "SecurityGroups[].{Name:GroupName,Inbound:IpPermissions[?ToPort==\`22\` || ToPort==\`8000\`]}"
+[
+    {
+        "Name": "devops-project-app-server-sg",
+        "Inbound": [
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 8000,
+                "ToPort": 8000,
+                "UserIdGroupPairs": [],
+                "IpRanges": [
+                    {
+                        "Description": "HTTP for Flask app",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Ipv6Ranges": [],
+                "PrefixListIds": []
+            },
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 22,
+                "ToPort": 22,
+                "UserIdGroupPairs": [
+                    {
+                        "Description": "SSH from bastion",
+                        "UserId": "554930853385",
+                        "GroupId": "sg-06b8a82e8d1fccc87"
+                    }
+                ],
+                "IpRanges": [],
+                "Ipv6Ranges": [],
+                "PrefixListIds": []
+            }
+        ]
+    },
+    {
+        "Name": "devops-project-bastion-sg",
+        "Inbound": [
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 22,
+                "ToPort": 22,
+                "UserIdGroupPairs": [],
+                "IpRanges": [
+                    {
+                        "Description": "SSH from anywhere",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Ipv6Ranges": [],
+                "PrefixListIds": []
+            }
+        ]
+    }
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws iam list-roles --query "Roles[?RoleName=='devops-project-ec2-role']"
+[
+    {
+        "Path": "/",
+        "RoleName": "devops-project-ec2-role",
+        "RoleId": "AROAYCNDU2YEYDZ4GRB6C",
+        "Arn": "arn:aws:iam::554930853385:role/devops-project-ec2-role",
+        "CreateDate": "2025-08-26T07:34:49+00:00",
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "ec2.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        },
+        "MaxSessionDuration": 3600
+    }
+]
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ aws iam list-attached-role-policies --role-name devops-project-ec2-role
+{
+    "AttachedPolicies": [
+        {
+            "PolicyName": "devops-project-ec2-policy",
+            "PolicyArn": "arn:aws:iam::554930853385:policy/devops-project-ec2-policy"
+        }
+    ]
+}
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ ssh -i ~/.ssh/devopsproj devops@13.61.153.223 "docker --version && docker-compose --version && python3 --version"
+Docker version 27.5.1, build 27.5.1-0ubuntu3~22.04.2
+Docker Compose version v2.27.1
+Python 3.10.12
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ ssh -i ~/.ssh/devopsproj devops@13.61.153.223 "sudo ufw status"
+sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper
+sudo: a password is required
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ ssh -i ~/.ssh/devopsproj devops@13.61.153.223 "whoami && groups"
+devops
+devops sudo docker
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ ansible-vault encrypt group_vars/all/vault.yml
+New Vault password: 
+Confirm New Vault password: 
+ERROR! Unable to read source file (/home/tk-lpt-0434/Projects/cloud-devops-lab-2025/group_vars/all/vault.yml): [Errno 2] No such file or directory: '/home/tk-lpt-0434/Projects/cloud-devops-lab-2025/group_vars/all/vault.yml'
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025$ cd ansible/
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025/ansible$ ansible-vault encrypt group_vars/all/vault.yml
+New Vault password: 
+Confirm New Vault password: 
+ERROR! input is already encrypted
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025/ansible$ ansible-vault view group_vars/all/vault.yml --ask-vault-pass
+Vault password: 
+devops_password: "devops_password_here"
+tk-lpt-0434@tklpt0434-Inspiron-5502:~/Projects/cloud-devops-lab-2025/ansible$ aws ssm get-parameters --names /jenkins/user /jenkins/password --with-decryption --region eu-north-1
+{
+    "Parameters": [
+        {
+            "Name": "/jenkins/password",
+            "Type": "SecureString",
+            "Value": "fQ>$GZYXk<nZg79G",
+            "Version": 1,
+            "LastModifiedDate": "2025-08-26T12:34:58.065000+05:00",
+            "ARN": "arn:aws:ssm:eu-north-1:554930853385:parameter/jenkins/password",
+            "DataType": "text"
+        },
+        {
+            "Name": "/jenkins/user",
+            "Type": "String",
+            "Value": "admin",
+            "Version": 1,
+            "LastModifiedDate": "2025-08-26T12:34:58.065000+05:00",
+            "ARN": "arn:aws:ssm:eu-north-1:554930853385:parameter/jenkins/user",
+            "DataType": "text"
+        }
+    ],
+    "InvalidParameters": []
+}
+-> Ansible's Inventory.ini:
+[bastion]
+13.61.153.223 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/devopsproj
+
+[app_server]
+10.0.2.168 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/devopsproj ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -i ~/.ssh/devopsproj ubuntu@13.61.153.223"'
