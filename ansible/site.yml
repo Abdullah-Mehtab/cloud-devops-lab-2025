@@ -1,6 +1,10 @@
 ---
 - hosts: all
   become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  vars_files:
+    - group_vars/all/vault.yml
   tasks:
     - name: Update apt cache
       apt:
@@ -18,6 +22,18 @@
         - ufw
         - fail2ban
 
+    - name: Ensure pip is updated
+      pip:
+        name: pip
+        state: latest
+        executable: pip3
+
+    - name: Install passlib for password hashing
+      pip:
+        name: passlib
+        state: present
+        executable: pip3
+
     - name: Install Docker Compose
       shell: |
         curl -L "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -31,50 +47,49 @@
         state: started
         enabled: yes
 
-    # UFW Configuration (commented out)
-    # - name: Configure UFW - allow SSH
-    #   ufw:
-    #     rule: allow
-    #     port: "22"
-    #     proto: tcp
+    - name: Configure UFW - allow SSH
+      ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
 
-    # - name: Allow port 8000 for app server
-    #   ufw:
-    #     rule: allow
-    #     port: "8000"
-    #     proto: tcp
-    #   when: inventory_hostname in groups['app_server']
+    - name: Allow port 8000 for app server
+      ufw:
+        rule: allow
+        port: "8000"
+        proto: tcp
+      when: inventory_hostname in groups['app_server']
 
-    # - name: Enable UFW
-    #   ufw:
-    #     state: enabled
-    #     policy: deny
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        policy: deny
 
-    # Fail2Ban Configuration (commented out)
-    # - name: Configure Fail2Ban for SSH
-    #   copy:
-    #     content: |
-    #       [sshd]
-    #       enabled = true
-    #       port = ssh
-    #       filter = sshd
-    #       logpath = /var/log/auth.log
-    #       maxretry = 3
-    #       bantime = 600
-    #     dest: /etc/fail2ban/jail.d/sshd.local
-    #     owner: root
-    #     group: root
-    #     mode: 0644
+    - name: Configure Fail2Ban for SSH
+      copy:
+        content: |
+          [sshd]
+          enabled = true
+          port = ssh
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+          bantime = 600
+        dest: /etc/fail2ban/jail.d/sshd.local
+        owner: root
+        group: root
+        mode: 0644
 
-    # - name: Start and enable Fail2Ban service
-    #   systemd:
-    #     name: fail2ban
-    #     state: started
-    #     enabled: yes
+    - name: Start and enable Fail2Ban service
+      systemd:
+        name: fail2ban
+        state: started
+        enabled: yes
 
-    - name: Create devops user without password (SSH key only)
+    - name: Create devops user with pre-hashed password
       user:
         name: devops
+        password: "$6$A2dm6Oi8.tstSIH4$Z3bH02K7r9YJUsZJlfqiHl5MAsSbtr3fg1V0pM590DwZkILWRjbvP3/vbRKsHU.v6wbHdYEeavjuzXG8lcj26/a"
         groups: sudo,docker
         shell: /bin/bash
         append: yes
@@ -109,6 +124,8 @@
 
 - hosts: app_server
   become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
   tasks:
     - name: Create app directory structure
       file:
