@@ -44,3 +44,23 @@
 
 ## Verification
 All infrastructure components validated through AWS CLI commands and SSH access tests.
+
+## Phase 4: Containerization & CI/CD - IN PROGRESS 🚧
+
+### Planned Setup
+- **Docker Compose Services**:
+  - Jenkins (persistent volume)
+  - SonarQube + Postgres (DB volume)
+  - Grafana + Prometheus (metrics volume)
+  - Nginx reverse proxy (routing /jenkins, /sonar, /grafana)
+- **Jenkins Pipeline (Declarative Groovy)**:
+  - Checkout repo
+  - Build & containerize Flask app
+  - Run unit tests + linting
+  - Push image to DockerHub
+  - Deploy app to EC2 (via Ansible)
+
+### Current Status
+- Started designing `docker-compose.yml`
+- Deciding volume mappings for Jenkins, SonarQube DB, and Prometheus metrics
+- Evaluating Nginx reverse proxy config for service routing

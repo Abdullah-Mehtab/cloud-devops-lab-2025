@@ -45,3 +45,23 @@ Used for container orchestration for:
 - **Free Tier Resources**: t3.micro instances, minimal EBS storage
 - **Single NAT Gateway**: Shared across all private subnets to minimize costs
 - **On-Demand Pricing**: DynamoDB with PAY_PER_REQUEST billing
+
+## Phase 4 Architecture Decisions
+
+### Container Orchestration
+- Using **Docker Compose** to define and manage multi-container stack for local and EC2 deployment.
+- Persistent volumes chosen for:
+  - Jenkins (job history, plugins, configs)
+  - SonarQube + Postgres (code quality data)
+  - Prometheus (metrics storage)
+
+### Service Integration
+- **Nginx reverse proxy** to expose multiple services under distinct paths (`/jenkins`, `/sonar`, `/grafana`).
+- Centralized logging planned for Jenkins, SonarQube, and Prometheus.
+
+### CI/CD Strategy
+- Jenkins declarative pipeline will:
+  - Build Flask app Docker image
+  - Run linting + unit tests
+  - Push to DockerHub
+  - Trigger deployment on AWS EC2 via Ansible
