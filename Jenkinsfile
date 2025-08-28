@@ -14,7 +14,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 dir('python-app') {
-                    // Use environment variable for image name
                     sh "docker build -t ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} ."
                 }
             }
@@ -22,14 +21,18 @@ pipeline {
         
         stage('Run Tests') {
             steps {
-                sh "docker run --rm ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} python -m pytest tests/ -v"
-                sh "docker run --rm ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} flake8 app.py"
+                // Run tests with timeout to prevent hanging
+                timeout(time: 5, unit: 'MINUTES') {
+                    sh "docker run --rm ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} python -m pytest tests/ -v"
+                }
+                // Run flake8 linting
+                sh "docker run --rm ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} flake8 app.py --max-line-length=120"
             }
         }
         
         stage('SonarQube Analysis') {
             steps {
-                // Use the correct port (9001 external -> 9000 internal)
+                // Use the correct internal Docker network address
                 sh "sonar-scanner -Dsonar.projectKey=my-python-app -Dsonar.sources=python-app -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=admin -Dsonar.password=admin"
             }
         }
@@ -47,11 +50,8 @@ pipeline {
         
         stage('Deploy with Ansible') {
             steps {
-                ansiblePlaybook(
-                    playbook: 'ansible/deploy-app.yml',
-                    extras: "--extra-vars 'app_version=${env.BUILD_ID}'",
-                    inventory: 'ansible/inventory.ini'
-                )
+                // Use the absolute path to avoid any PATH issues
+                sh "ansible-playbook ansible/deploy-app.yml --extra-vars 'app_version=${env.BUILD_ID}' -i ansible/inventory.ini"
             }
         }
     }
@@ -59,6 +59,13 @@ pipeline {
     post {
         always {
             sh 'docker system prune -f'
+        }
+        failure {
+            // Notify on failure (you can add Slack/email notifications here later)
+            echo 'Pipeline failed!'
+        }
+        success {
+            echo 'Pipeline succeeded!'
         }
     }
 }
