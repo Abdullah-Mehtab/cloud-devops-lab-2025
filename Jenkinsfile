@@ -27,7 +27,6 @@ pipeline {
         
         stage('SonarQube Analysis') {
             steps {
-                // Ensure sonar-scanner is installed on Jenkins agent
                 sh 'sonar-scanner -Dsonar.projectKey=my-python-app -Dsonar.sources=. -Dsonar.host.url=http://localhost:9001 -Dsonar.login=admin -Dsonar.password=admin'
             }
         }
