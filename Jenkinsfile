@@ -2,7 +2,11 @@ pipeline {
     agent any
 
     environment {
+<<<<<<< HEAD
         GIT_CREDENTIALS = 'github-pat-credentials' // your GitHub PAT credential ID
+=======
+        GIT_CREDENTIALS = 'github-pat-credentials'
+>>>>>>> 4999ccd (Minimal Jenkinsfile: Python-Flask + HTML deployment (removed secret))
         GIT_REPO = 'https://github.com/Abdullah-Mehtab/cloud-devops-lab-2025.git'
         GIT_BRANCH = 'develop'
     }
