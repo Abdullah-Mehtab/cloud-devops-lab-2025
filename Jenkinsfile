@@ -43,7 +43,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Push to Docker Hub') {
             steps {
                 script {
@@ -57,11 +57,18 @@ pipeline {
         
         stage('Deploy with Ansible') {
             steps {
-                // Use the absolute path to avoid any PATH issues
-                sh "ansible-playbook ansible/deploy-app.yml --extra-vars 'app_version=${env.BUILD_ID}' -i ansible/inventory.ini"
+                withCredentials([string(credentialsId: 'ansible-vault-password', variable: 'VAULT_PASSWORD')]) {
+                    sh '''
+                        echo "$VAULT_PASSWORD" > /tmp/vault-pass.txt
+                        ansible-playbook ansible/deploy-app.yml \
+                            --extra-vars "app_version=${env.BUILD_ID}" \
+                            --vault-password-file /tmp/vault-pass.txt \
+                            -i ansible/inventory.ini
+                        rm -f /tmp/vault-pass.txt
+                    '''
+                }
             }
         }
-    }
     
     post {
         always {
