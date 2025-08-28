@@ -1,6 +1,6 @@
 // Jenkinsfile — Fix B: host agent (label 'app-server'), HTTPS checkout using PAT stored in Jenkins
 pipeline {
-  agent { label 'app-server' }
+  agent { agent any }
 
   environment {
     DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
