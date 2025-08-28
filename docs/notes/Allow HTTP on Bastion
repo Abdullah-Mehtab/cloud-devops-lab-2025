@@ -1,0 +1,9 @@
+# Get bastion security group ID
+BASTION_SG_ID=$(aws ec2 describe-instances --filters "Name=ip-address,Values=13.61.153.223" --query "Reservations[].Instances[].SecurityGroups[].GroupId" --output text)
+
+# Allow HTTP traffic to bastion
+aws ec2 authorize-security-group-ingress \
+    --group-id $BASTION_SG_ID \
+    --protocol tcp \
+    --port 80 \
+    --cidr 0.0.0.0/0

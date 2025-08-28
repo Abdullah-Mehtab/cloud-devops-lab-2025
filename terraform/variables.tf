@@ -14,10 +14,10 @@ variable "aws_region" {
 
   # TYPE: Specifies the type of value allowed for this variable
   # string = expects text value
-  type        = string
+  type = string
 
   # DEFAULT: If no value is passed when running Terraform, this value will be used
-  default     = "eu-north-1"  # Stockholm region
+  default = "eu-north-1" # Stockholm region
   # Reasoning: Default ensures resources deploy in a specific region without needing extra input
   # Where used: This variable will be referenced in provider blocks or modules requiring region info
 }
@@ -26,9 +26,9 @@ variable "aws_region" {
 # VARIABLE: vpc_cidr
 # --------------------------
 variable "vpc_cidr" {
-  description = "CIDR block for VPC"  # Human-friendly explanation
+  description = "CIDR block for VPC" # Human-friendly explanation
   type        = string               # Data type is string
-  default     = "10.0.0.0/16"       # Default CIDR block for the VPC
+  default     = "10.0.0.0/16"        # Default CIDR block for the VPC
   # Reasoning: CIDR defines the IP address range of the VPC
   # Where used: Passed to VPC module to create the virtual network
   # Why defined: Makes VPC IP range configurable without editing the module
@@ -38,9 +38,9 @@ variable "vpc_cidr" {
 # VARIABLE: public_subnet_cidr
 # --------------------------
 variable "public_subnet_cidr" {
-  description = "CIDR block for public subnet"  # Explains purpose
-  type        = string                            # Must be string
-  default     = "10.0.1.0/24"                    # Default IP range for public subnet
+  description = "CIDR block for public subnet" # Explains purpose
+  type        = string                         # Must be string
+  default     = "10.0.1.0/24"                  # Default IP range for public subnet
   # Reasoning: Public subnet hosts resources accessible from the internet (e.g., bastion)
   # Where used: Passed to VPC module or subnet creation resource
   # Why defined: Makes subnet configurable and avoids hardcoding
@@ -50,9 +50,9 @@ variable "public_subnet_cidr" {
 # VARIABLE: private_subnet_cidr
 # --------------------------
 variable "private_subnet_cidr" {
-  description = "CIDR block for private subnet"  # Explanation
-  type        = string                             # Must be string
-  default     = "10.0.2.0/24"                     # Default IP range for private subnet
+  description = "CIDR block for private subnet" # Explanation
+  type        = string                          # Must be string
+  default     = "10.0.2.0/24"                   # Default IP range for private subnet
   # Reasoning: Private subnet hosts resources not directly exposed to internet (e.g., app server)
   # Where used: Passed to VPC module for creating private subnet
   # Why defined: Ensures flexibility and modularity
@@ -62,9 +62,9 @@ variable "private_subnet_cidr" {
 # VARIABLE: instance_type
 # --------------------------
 variable "instance_type" {
-  description = "EC2 instance type"  # Explains what this variable configures
-  type        = string                 # Must be a string
-  default     = "t3.micro"            # Default EC2 size (small, low-cost)
+  description = "EC2 instance type" # Explains what this variable configures
+  type        = string              # Must be a string
+  default     = "t3.micro"          # Default EC2 size (small, low-cost)
   # Reasoning: Defines hardware configuration (CPU, RAM) for EC2 instances
   # Where used: Passed to EC2 module when creating instances
   # Why defined: Makes instance type configurable without editing EC2 module directly

@@ -1,0 +1,166 @@
+---
+- name: Deploy Docker Stack with retries and health checks
+  hosts: app_server
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+    - name: Ensure docker directory exists
+      file:
+        path: /home/devops/apps/docker
+        state: directory
+        owner: devops
+        group: devops
+        mode: 0755
+
+    - name: Copy docker-compose.yml
+      copy:
+        src: ../docker/docker-compose.yml
+        dest: /home/devops/apps/docker/docker-compose.yml
+        owner: devops
+        group: devops
+        mode: 0644
+
+    - name: Create nginx directory
+      file:
+        path: /home/devops/apps/docker/nginx
+        state: directory
+        owner: devops
+        group: devops
+        mode: 0755
+
+    - name: Copy nginx.conf
+      copy:
+        src: ../docker/nginx/nginx.conf
+        dest: /home/devops/apps/docker/nginx/nginx.conf
+        owner: devops
+        group: devops
+        mode: 0644
+
+    - name: Create prometheus directory
+      file:
+        path: /home/devops/apps/docker/prometheus
+        state: directory
+        owner: devops
+        group: devops
+        mode: 0755
+
+    - name: Copy prometheus.yml
+      copy:
+        src: ../docker/prometheus/prometheus.yml
+        dest: /home/devops/apps/docker/prometheus/prometheus.yml
+        owner: devops
+        group: devops
+        mode: 0644
+
+    - name: Install Docker SDK for Python
+      pip:
+        name: docker
+        state: present
+      become: yes
+
+    - name: Install Docker Compose plugin
+      pip:
+        name: docker-compose
+        state: present
+      become: yes
+
+    - name: Ensure Docker is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      become: yes
+
+    - name: Copy Python application code and Dockerfile
+      copy:
+        src: "{{ item }}"
+        dest: "/home/devops/apps/python-app/"
+        owner: devops
+        group: devops
+        mode: 0644
+      with_items:
+        - "../python-app/app.py"
+        - "../python-app/requirements.txt"
+        - "../python-app/Dockerfile"
+        - "../python-app/tests/"
+
+    - name: Copy HTML application code and Dockerfile
+      copy:
+        src: "{{ item }}"
+        dest: "/home/devops/apps/html-app/"
+        owner: devops
+        group: devops
+        mode: 0644
+      with_items:
+        - "../html-app/index.html"
+        - "../html-app/Dockerfile"
+
+    - name: Ensure correct permissions on app directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: devops
+        group: devops
+        mode: 0755
+      with_items:
+        - "/home/devops/apps/python-app"
+        - "/home/devops/apps/html-app"
+
+    - name: Verify Dockerfile presence
+      stat:
+        path: "{{ item }}"
+      register: dockerfile_check
+      with_items:
+        - "/home/devops/apps/python-app/Dockerfile"
+        - "/home/devops/apps/html-app/Dockerfile"
+
+    - name: Display Dockerfile check results
+      debug:
+        msg: "Dockerfile exists at {{ item.item }}: {{ item.stat.exists }}"
+      with_items: "{{ dockerfile_check.results }}"
+
+    # --- UPDATED: Pull Docker images with retry & debugging ---
+    - name: Pull Docker images with retries
+      shell: |
+        echo "=== Starting Docker image pull ==="
+        export COMPOSE_HTTP_TIMEOUT=300
+        export DOCKER_CLIENT_TIMEOUT=300
+        docker compose -f /home/devops/apps/docker/docker-compose.yml pull
+        echo "=== Finished Docker image pull ==="
+      args:
+        chdir: /home/devops/apps/docker
+      register: pull_result
+      retries: 5
+      delay: 30
+      until: pull_result.rc == 0
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Debug pull result if it failed after all retries
+      debug:
+        msg:
+          - "Docker pull failed after all retries. Last rc={{ pull_result.rc }}"
+          - "stdout: {{ pull_result.stdout_lines | default([]) | join('\\n') }}"
+          - "stderr: {{ pull_result.stderr_lines | default([]) | join('\\n') }}"
+      when: pull_result is failed
+
+    # --- UPDATED: Compose stack with debugging ---
+    - name: Start the Docker stack
+      shell: |
+        echo "=== Starting Docker stack compose ==="
+        docker compose -f /home/devops/apps/docker/docker-compose.yml up -d --build
+        echo "=== Docker stack compose finished ==="
+      args:
+        chdir: /home/devops/apps/docker
+      when: pull_result is succeeded
+
+    - name: Verify containers are running
+      shell: docker ps --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}\t{{ '{{' }}.Ports{{ '}}' }}"
+      register: docker_ps
+      changed_when: false
+
+    - name: Display container status
+      debug:
+        var: docker_ps.stdout

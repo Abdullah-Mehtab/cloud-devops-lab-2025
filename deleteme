@@ -1,0 +1,87 @@
+I wrote a very detailed well debugged script exactly to do what you said, since you said just try again... but I guess internet is NOT working for the app-server... tell me what should I do to fix this? How should I test it? Should I restart my app-server and bastion-server once? How do I check?
+
+Give me commands to go into app-server and check internet connection, or i dont know... give me something man. Making it try more wont fix connection issues...
+
+"TASK [Debug - announce start of docker image pull with retries] *************************************
+ok: [10.0.2.168] => {
+    "msg": [
+        "Starting docker image pull with retries",
+        "COMPOSE_HTTP_TIMEOUT=300, retries=5, delay=30s"
+    ]
+}
+
+TASK [Pull Docker images with retries] **************************************************************
+FAILED - RETRYING: [10.0.2.168]: Pull Docker images with retries (5 retries left).
+FAILED - RETRYING: [10.0.2.168]: Pull Docker images with retries (4 retries left).
+FAILED - RETRYING: [10.0.2.168]: Pull Docker images with retries (3 retries left).
+FAILED - RETRYING: [10.0.2.168]: Pull Docker images with retries (2 retries left).
+FAILED - RETRYING: [10.0.2.168]: Pull Docker images with retries (1 retries left).
+fatal: [10.0.2.168]: FAILED! => {"attempts": 5, "changed": false, "cmd": "set -o pipefail\nexport COMPOSE_HTTP_TIMEOUT=300\nexport DOCKER_CLIENT_TIMEOUT=300\nexport COMPOSE_PROJECT_NAME=devops-stack\necho \"Running: docker compose -f /home/devops/apps/docker/docker-compose.yml pull\"\ndocker compose -f /home/devops/apps/docker/docker-compose.yml pull\n", "delta": "0:00:00.003356", "end": "2025-08-27 22:19:48.590352", "msg": "non-zero return code", "rc": 2, "start": "2025-08-27 22:19:48.586996", "stderr": "/bin/sh: 1: set: Illegal option -o pipefail", "stderr_lines": ["/bin/sh: 1: set: Illegal option -o pipefail"], "stdout": "", "stdout_lines": []}
+...ignoring
+
+TASK [Debug - show pull attempt result (stdout)] ****************************************************
+ok: [10.0.2.168] => {
+    "msg": [
+        "Docker pull rc=2",
+        "Last stdout (tail 20 lines):",
+        ""
+    ]
+}
+
+TASK [Debug - show pull attempt result (stderr) if any] *********************************************
+ok: [10.0.2.168] => {
+    "msg": [
+        "Last stderr (tail 20 lines):",
+        "/bin/sh: 1: set: Illegal option -o pipefail"
+    ]
+}
+
+TASK [Debug - warn if pull failed after retries] ****************************************************
+ok: [10.0.2.168] => {
+    "msg": "WARNING: Docker pull did not succeed after retries. Proceeding to 'docker compose up -d --build' which will attempt to build/start containers anyway."
+}
+
+TASK [Debug - announce starting docker compose up] **************************************************
+ok: [10.0.2.168] => {
+    "msg": "Starting 'docker compose up -d --build' (this may build images locally if pulls failed). COMPOSE_HTTP_TIMEOUT=300"
+}
+
+TASK [Start the Docker stack (compose up -d --build)] ***********************************************
+ok: [10.0.2.168]
+
+TASK [Display Docker Compose output (tail)] *********************************************************
+ok: [10.0.2.168] => {
+    "msg": [
+        "Compose exit rc: 2",
+        "Compose stdout (tail 100 lines):",
+        ""
+    ]
+}
+
+TASK [Wait a few seconds for containers to settle] **************************************************
+Pausing for 8 seconds
+(ctrl+C then 'C' = continue early, ctrl+C then 'A' = abort)
+ok: [10.0.2.168]
+
+TASK [Verify containers are running (ps)] ***********************************************************
+ok: [10.0.2.168]
+
+TASK [Display container status] *********************************************************************
+ok: [10.0.2.168] => {
+    "docker_ps.stdout": "NAMES     STATUS    PORTS"
+}
+
+TASK [Tail recent logs for key containers (jenkins, sonarqube, grafana, prometheus, python-app) - 40 lines each (if present)] ***
+ok: [10.0.2.168]
+
+TASK [Display recent logs summary] ******************************************************************
+ok: [10.0.2.168] => {
+    "msg": "===== container jenkins not present/running =====\n===== container sonarqube not present/running =====\n===== container grafana not present/running =====\n===== container prometheus not present/running =====\n===== container python-app not present/running ====="
+}
+
+TASK [Wait for services to become healthy] **********************************************************
+failed: [10.0.2.168] (item={'name': 'Jenkins', 'port': 8080}) => {"ansible_loop_var": "item", "changed": false, "elapsed": 180, "item": {"name": "Jenkins", "port": 8080}, "msg": "Timeout when waiting for 127.0.0.1:8080"}
+failed: [10.0.2.168] (item={'name': 'SonarQube', 'port': 9000}) => {"ansible_loop_var": "item", "changed": false, "elapsed": 180, "item": {"name": "SonarQube", "port": 9000}, "msg": "Timeout when waiting for 127.0.0.1:9000"}
+failed: [10.0.2.168] (item={'name': 'Grafana', 'port': 3000}) => {"ansible_loop_var": "item", "changed": false, "elapsed": 180, "item": {"name": "Grafana", "port": 3000}, "msg": "Timeout when waiting for 127.0.0.1:3000"}
+
+"

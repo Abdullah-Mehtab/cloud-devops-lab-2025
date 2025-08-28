@@ -1,0 +1,54 @@
+---
+- name: Verify Stack Versions
+  hosts: app_server
+  become: no
+  gather_facts: no
+  tasks:
+    - name: Get Jenkins version
+      uri:
+        url: http://localhost:8080/login
+        return_content: yes
+        status_code: 200
+      register: jenkins_page
+      failed_when: "jenkins_page.status != 200 or 'Jenkins' not in jenkins_page.content"
+      changed_when: false
+
+    - name: Extract Jenkins version from page
+      set_fact:
+        jenkins_version: "{{ jenkins_page.content | regex_search('Jenkins ver\\. (.*?)\\') | first }}"
+      when: jenkins_page is succeeded
+
+    - name: Get SonarQube status via API
+      uri:
+        url: http://localhost:9000/api/system/status
+        return_content: yes
+        status_code: 200
+      register: sonarqube_status
+      failed_when: sonarqube_status.status != 200
+      changed_when: false
+
+    - name: Set SonarQube version fact
+      set_fact:
+        sonarqube_version: "{{ sonarqube_status.json.version }}"
+      when: sonarqube_status is succeeded
+
+    - name: Get Grafana version via API
+      uri:
+        url: http://localhost:3000/api/health
+        return_content: yes
+        status_code: 200
+      register: grafana_health
+      failed_when: grafana_health.status != 200
+      changed_when: false
+
+    - name: Set Grafana version fact
+      set_fact:
+        grafana_version: "{{ grafana_health.json.version }}"
+      when: grafana_health is succeeded
+
+    - name: Display Collected Version Information
+      debug:
+        msg:
+          - "Jenkins Version: {{ jenkins_version | default('COULD NOT DETERMINE') }}"
+          - "SonarQube Version: {{ sonarqube_version | default('COULD NOT DETERMINE') }}"
+          - "Grafana Version: {{ grafana_version | default('COULD NOT DETERMINE') }}"

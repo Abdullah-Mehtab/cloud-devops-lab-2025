@@ -13,7 +13,7 @@
 # --------------------------
 resource "aws_key_pair" "devops_key" {
   # KEY NAME: AWS identifier for this key
-  key_name   = "devops-proj-key"
+  key_name = "devops-proj-key"
 
   # PUBLIC KEY: Path to local public SSH key
   # Reasoning: This allows Terraform to import an existing key instead of creating a new one
@@ -31,13 +31,13 @@ resource "aws_key_pair" "devops_key" {
 # --------------------------
 resource "aws_security_group" "bastion" {
   # Name of security group in AWS
-  name        = "${var.project_name}-bastion-sg"
+  name = "${var.project_name}-bastion-sg"
 
   # Description for clarity
   description = "Security group for bastion host"
 
   # Attach SG to specific VPC
-  vpc_id      = var.vpc_id
+  vpc_id = var.vpc_id
 
   # --------------------------
   # INGRESS RULE: SSH from anywhere
@@ -57,8 +57,8 @@ resource "aws_security_group" "bastion" {
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"            # -1 means all protocols
-    cidr_blocks = ["0.0.0.0/0"]  # Allow outbound to anywhere
+    protocol    = "-1"          # -1 means all protocols
+    cidr_blocks = ["0.0.0.0/0"] # Allow outbound to anywhere
     # Reasoning: Bastion may need to connect to app servers or internet
   }
 
@@ -71,58 +71,60 @@ resource "aws_security_group" "bastion" {
 # --------------------------
 # RESOURCE: aws_security_group.app_server
 # --------------------------
+# --------------------------
+# UPDATE ADDED: Enhanced application server security group with dynamic app ports
+# The following resource was added/updated to:
+# - keep SSH limited to bastion SG
+# - expose Flask HTTP port 8000 publicly
+# - allow other application ports only from bastion via a dynamic block using var.app_ports
+# --------------------------
+# Security group for application server
 resource "aws_security_group" "app_server" {
-  # Name of SG
   name        = "${var.project_name}-app-server-sg"
-
-  # Description
   description = "Security group for application server"
-
-  # Attach SG to the VPC
   vpc_id      = var.vpc_id
 
-  # --------------------------
-  # INGRESS RULE: SSH from bastion host only
-  # --------------------------
+  # SSH from bastion only
   ingress {
     description     = "SSH from bastion"
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    # SECURITY GROUP REFERENCE: only allow SSH from bastion SG
     security_groups = [aws_security_group.bastion.id]
-    # Reasoning: App server SSH access should be limited to bastion host for security
   }
 
-  # --------------------------
-  # INGRESS RULE: HTTP for Flask app
-  # --------------------------
+  # HTTP for Flask app (public)
   ingress {
     description = "HTTP for Flask app"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Open to the internet (for demo/testing)
-    # Reasoning: Allows HTTP traffic for your Flask application
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # --------------------------
-  # EGRESS RULE: Allow all outbound traffic
-  # --------------------------
+  # Add all other application ports (accessible only from bastion)
+  dynamic "ingress" {
+    for_each = var.app_ports
+    content {
+      description     = "Access for ${ingress.key}"
+      from_port       = ingress.value
+      to_port         = ingress.value
+      protocol        = "tcp"
+      security_groups = [aws_security_group.bastion.id]
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-    # Reasoning: App server can initiate outbound connections (e.g., to update packages)
   }
 
-  # TAGS: identify SG in AWS console
   tags = {
     Name = "${var.project_name}-app-server-sg"
   }
 }
-
 # --------------------------
 # IAM Resources
 # --------------------------
