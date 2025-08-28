@@ -1,66 +1,61 @@
 pipeline {
     agent any
-
     environment {
-<<<<<<< HEAD
-        GIT_CREDENTIALS = 'github-pat-credentials' // your GitHub PAT credential ID
-=======
-        GIT_CREDENTIALS = 'github-pat-credentials'
->>>>>>> 4999ccd (Minimal Jenkinsfile: Python-Flask + HTML deployment (removed secret))
-        GIT_REPO = 'https://github.com/Abdullah-Mehtab/cloud-devops-lab-2025.git'
-        GIT_BRANCH = 'develop'
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
     }
-
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                git(
-                    url: "${GIT_REPO}",
-                    branch: "${GIT_BRANCH}",
-                    credentialsId: "${GIT_CREDENTIALS}"
+                checkout scm  // Gets your code from GitHub
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                dir('python-app') {
+                    sh 'docker build -t my-python-app:${BUILD_ID} .'
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                sh 'docker run --rm my-python-app:${BUILD_ID} python -m pytest tests/ -v'
+                // Add linting if needed: flake8 python-app/app.py
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                // Ensure sonar-scanner is installed on Jenkins agent
+                sh 'sonar-scanner -Dsonar.projectKey=my-python-app -Dsonar.sources=. -Dsonar.host.url=http://localhost:9001 -Dsonar.login=admin -Dsonar.password=admin'
+            }
+        }
+        
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                        docker.image("my-python-app:${BUILD_ID}").push()
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy with Ansible') {
+            steps {
+                ansiblePlaybook(
+                    playbook: 'ansible/deploy-app.yml',
+                    extras: "--extra-vars 'app_version=${BUILD_ID}'",
+                    inventory: 'ansible/inventory.ini'
                 )
             }
         }
-
-        stage('Verify Docker & Compose') {
-            steps {
-                sh 'docker --version'
-                sh 'docker-compose --version || echo "docker-compose not installed"'
-            }
-        }
-
-        stage('Build & Deploy Python-Flask App') {
-            steps {
-                dir('python-flask-app') {
-                    sh '''
-                        docker-compose build
-                        docker-compose up -d
-                    '''
-                }
-            }
-        }
-
-        stage('Deploy HTML App') {
-            steps {
-                dir('html-app') {
-                    sh 'cp -r . /var/www/html/'  // Adjust path if needed
-                }
-            }
-        }
-
-        stage('Verify Containers') {
-            steps {
-                sh 'docker ps -a'
-            }
-        }
     }
-
+    
     post {
-        success {
-            echo 'Deployment completed successfully!'
-        }
-        failure {
-            echo 'Deployment failed. Check logs!'
+        always {
+            sh 'docker system prune -f'  // Clean up
         }
     }
 }
