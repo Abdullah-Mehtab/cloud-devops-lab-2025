@@ -32,8 +32,15 @@ pipeline {
         
         stage('SonarQube Analysis') {
             steps {
-                // Use the correct internal Docker network address
-                sh "sonar-scanner -Dsonar.projectKey=my-python-app -Dsonar.sources=python-app -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=admin -Dsonar.password=admin"
+                withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                    sh """
+                    sonar-scanner \
+                    -Dsonar.projectKey=my-python-app \
+                    -Dsonar.sources=python-app \
+                    -Dsonar.host.url=http://sonarqube:9000 \
+                    -Dsonar.login=${SONAR_TOKEN}
+                    """
+                }
             }
         }
         
