@@ -1,66 +1,71 @@
 pipeline {
     agent any
-
     environment {
-<<<<<<< HEAD
-        GIT_CREDENTIALS = 'github-pat-credentials' // your GitHub PAT credential ID
-=======
-        GIT_CREDENTIALS = 'github-pat-credentials'
->>>>>>> 4999ccd (Minimal Jenkinsfile: Python-Flask + HTML deployment (removed secret))
-        GIT_REPO = 'https://github.com/Abdullah-Mehtab/cloud-devops-lab-2025.git'
-        GIT_BRANCH = 'develop'
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        DOCKERHUB_USERNAME = 'abdullahmehtab'
     }
-
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                git(
-                    url: "${GIT_REPO}",
-                    branch: "${GIT_BRANCH}",
-                    credentialsId: "${GIT_CREDENTIALS}"
-                )
+                checkout scm
             }
         }
-
-        stage('Verify Docker & Compose') {
+        
+        stage('Build Docker Image') {
             steps {
-                sh 'docker --version'
-                sh 'docker-compose --version || echo "docker-compose not installed"'
-            }
-        }
-
-        stage('Build & Deploy Python-Flask App') {
-            steps {
-                dir('python-flask-app') {
-                    sh '''
-                        docker-compose build
-                        docker-compose up -d
-                    '''
+                dir('python-app') {
+                    sh "docker build -t ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} ."
                 }
             }
         }
-
-        stage('Deploy HTML App') {
+        
+        stage('Run Tests') {
             steps {
-                dir('html-app') {
-                    sh 'cp -r . /var/www/html/'  // Adjust path if needed
+                // Run tests with timeout to prevent hanging
+                timeout(time: 5, unit: 'MINUTES') {
+                    sh "docker run --rm ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} python -m pytest tests/ -v"
+                }
+                // Run flake8 linting
+                sh "docker run --rm ${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID} flake8 app.py --max-line-length=120"
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                // Use the correct internal Docker network address
+                sh "sonar-scanner -Dsonar.projectKey=my-python-app -Dsonar.sources=python-app -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=admin -Dsonar.password=admin"
+            }
+        }
+        
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                        docker.image("${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID}").push()
+                        docker.image("${env.DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID}").push('latest')
+                    }
                 }
             }
         }
-
-        stage('Verify Containers') {
+        
+        stage('Deploy with Ansible') {
             steps {
-                sh 'docker ps -a'
+                // Use the absolute path to avoid any PATH issues
+                sh "ansible-playbook ansible/deploy-app.yml --extra-vars 'app_version=${env.BUILD_ID}' -i ansible/inventory.ini"
             }
         }
     }
-
+    
     post {
-        success {
-            echo 'Deployment completed successfully!'
+        always {
+            sh 'docker system prune -f'
         }
         failure {
-            echo 'Deployment failed. Check logs!'
+            // Notify on failure (you can add Slack/email notifications here later)
+            echo 'Pipeline failed!'
+        }
+        success {
+            echo 'Pipeline succeeded!'
         }
     }
 }

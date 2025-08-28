@@ -1,0 +1,25 @@
+---
+- name: Deploy Python Flask App
+  hosts: app_server
+  become: yes
+  vars:
+    app_version: "{{ app_version }}"
+    
+  tasks:
+    - name: Pull new Docker image
+      docker_image:
+        name: "abdullahmehtab/my-python-app:{{ app_version }}"
+        source: pull
+        
+    - name: Stop and remove current container
+      docker_container:
+        name: python-app
+        state: absent
+        
+    - name: Start new container
+      docker_container:
+        name: python-app
+        image: "abdullahmehtab/my-python-app:{{ app_version }}"
+        ports:
+          - "8000:8000"
+        restart_policy: always
