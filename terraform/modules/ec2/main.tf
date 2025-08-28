@@ -21,7 +21,9 @@ resource "aws_instance" "bastion" {
   instance_type = var.instance_type
   # Source: Passed from module input (main.tf / terraform.tfvars)
   # Reasoning: Defines the VM size (CPU/RAM); using "t3.micro" as default for cost-effective dev/test
-
+  root_block_device {
+    volume_type = "gp3"  # Or gp2 if you’re using older
+  }
   # VARIABLE: subnet_id
   subnet_id = var.public_subnet_id
   # Source: Passed from VPC module output
@@ -56,13 +58,18 @@ resource "aws_instance" "app_server" {
   # DESCRIPTION: Defines an EC2 instance for the application server
   # Reasoning: App server lives in private subnet; accessed only via bastion or internal network
 
-  ami                    = data.aws_ami.ubuntu.id
+  ami = data.aws_ami.ubuntu.id
   # Same as bastion, latest Ubuntu AMI
 
-  instance_type          = var.instance_type
+  instance_type = "t3.small" #var.instance_type
   # Same as bastion, instance size from input
 
-  subnet_id              = var.private_subnet_id
+  root_block_device {
+    volume_size = 16     # Increase from current (e.g., 8 GiB) to 16 GiB
+    volume_type = "gp3"  # Or gp2 if you’re using older
+    delete_on_termination = false # Keep volume after instance termination for data persistence
+  }
+  subnet_id = var.private_subnet_id
   # Source: Passed from VPC module output
   # Reasoning: Private subnet ensures it's not exposed directly to the internet
 
@@ -70,7 +77,7 @@ resource "aws_instance" "app_server" {
   # Source: Security module output
   # Reasoning: App server SG controls traffic; allows SSH only from bastion, HTTP from internet as required
 
-  key_name               = var.key_name
+  key_name = var.key_name
   # Same SSH key as bastion for login
 
   # VARIABLE: iam_instance_profile

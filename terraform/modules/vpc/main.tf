@@ -16,17 +16,17 @@ resource "aws_vpc" "main" {
   # VARIABLE: cidr_block
   # Assign VPC IP range from variable defined in variables.tf or tfvars
   # Usage: Creates the network IP space for all subnets/resources
-  cidr_block           = var.vpc_cidr
+  cidr_block = var.vpc_cidr
 
   # Enable DNS resolution inside VPC
-  enable_dns_support   = true
+  enable_dns_support = true
 
   # Enable DNS hostnames for instances (like EC2) to have private DNS
   enable_dns_hostnames = true
 
   # TAGS: for identifying resources in AWS console
   tags = {
-    Name = "${var.project_name}-vpc"  # Example: "devops-project-vpc"
+    Name = "${var.project_name}-vpc" # Example: "devops-project-vpc"
   }
 }
 
@@ -105,7 +105,7 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
 
   # Deploy NAT in the public subnet (so private subnet can route through it)
-  subnet_id     = aws_subnet.public.id
+  subnet_id = aws_subnet.public.id
 
   # TAGS: identify NAT Gateway
   tags = {

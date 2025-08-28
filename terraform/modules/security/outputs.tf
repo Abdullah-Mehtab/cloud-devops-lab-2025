@@ -13,7 +13,7 @@ output "bastion_sg_id" {
   description = "Bastion security group ID"
 
   # VALUE: References the ID of the bastion security group created in this module
-  value       = aws_security_group.bastion.id
+  value = aws_security_group.bastion.id
   # Reasoning: EC2 instances that act as bastion hosts need this SG attached
   # Where used: main.tf or EC2 module uses module.security.bastion_sg_id
 }
@@ -25,7 +25,7 @@ output "app_server_sg_id" {
   description = "Application server security group ID"
 
   # VALUE: References the ID of the application server security group
-  value       = aws_security_group.app_server.id
+  value = aws_security_group.app_server.id
   # Reasoning: EC2 instances for the app server must attach this SG to control traffic
   # Where used: main.tf or EC2 module uses module.security.app_server_sg_id
 }
@@ -37,7 +37,7 @@ output "key_name" {
   description = "SSH key name"
 
   # VALUE: Returns the key name of the imported AWS key pair
-  value       = aws_key_pair.devops_key.key_name
+  value = aws_key_pair.devops_key.key_name
   # Reasoning: EC2 instances need the key name to attach for SSH login
   # Where used: main.tf or EC2 module uses module.security.key_name when creating instances
 }

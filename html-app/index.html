@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Party Effects Showcase</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            max-width: 600px;
+            width: 90%;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            background: linear-gradient(to right, #ff5e62, #ff9966);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            color: #e0e0e0;
+        }
+
+        .buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 15px 25px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            outline: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(45deg);
+            transition: all 0.5s ease;
+            opacity: 0;
+        }
+
+        button:hover::before {
+            opacity: 1;
+            animation: shine 1.5s infinite;
+        }
+
+        @keyframes shine {
+            0% {
+                transform: translateX(-100%) rotate(45deg);
+            }
+            100% {
+                transform: translateX(100%) rotate(45deg);
+            }
+        }
+
+        .effect-counter {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            color: #ffcc00;
+        }
+
+        /* Animation elements */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0.8;
+            z-index: 1;
+        }
+
+        .balloon {
+            position: absolute;
+            width: 40px;
+            height: 50px;
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .balloon::before {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 15px;
+            background-color: rgba(255, 255, 255, 0.7);
+        }
+
+        .firework {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background-color: #fff;
+            box-shadow: 0 0 10px #fff, 0 0 20px #fff;
+            z-index: 1;
+        }
+
+        .emoji {
+            position: absolute;
+            font-size: 2rem;
+            z-index: 1;
+        }
+
+        .message {
+            position: absolute;
+            font-size: 1.5rem;
+            color: white;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+            font-weight: bold;
+            z-index: 1;
+            opacity: 0;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+            }
+            100% {
+                transform: translateY(-100vh) rotate(360deg);
+            }
+        }
+
+        @keyframes explode {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(10);
+                opacity: 0;
+            }
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+            }
+        }
+
+        @keyframes fall {
+            0% {
+                transform: translateY(-10px) rotate(0deg);
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Party Effects Showcase</h1>
+        <p>Click any button to trigger a random animated effect</p>
+        
+        <div class="buttons">
+            <button id="effect1">Party Time!</button>
+            <button id="effect2">Celebrate!</button>
+            <button id="effect3">Awooga!</button>
+            <button id="effect4">Let's Go!</button>
+        </div>
+        
+        <div class="effect-counter">Effects triggered: <span id="counter">0</span></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const buttons = document.querySelectorAll('button');
+            const counterElement = document.getElementById('counter');
+            let effectCounter = 0;
+            
+            // Array of colors for various effects
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ff9900'];
+            
+            // Array of emojis for effects
+            const emojis = ['🎉', '🎊', '🎈', '🥳', '✨', '💫', '🌟', '😄', '👍'];
+            
+            // Array of messages for effects
+            const messages = ['Wow!', 'Amazing!', 'Awesome!', 'Yay!', 'Fantastic!', 'Great!', 'Excellent!'];
+            
+            // Function to update counter
+            function updateCounter() {
+                effectCounter++;
+                counterElement.textContent = effectCounter;
+            }
+            
+            // Function to create confetti
+            function createConfetti() {
+                for (let i = 0; i < 100; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + 'vw';
+                    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.animation = `fall ${Math.random() * 3 + 2}s linear forwards`;
+                    document.body.appendChild(confetti);
+                    
+                    // Remove confetti after animation completes
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, 5000);
+                }
+            }
+            
+            // Function to create balloons
+            function createBalloons() {
+                for (let i = 0; i < 20; i++) {
+                    const balloon = document.createElement('div');
+                    balloon.className = 'balloon';
+                    balloon.style.left = Math.random() * 100 + 'vw';
+                    balloon.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    balloon.style.animation = `float ${Math.random() * 10 + 5}s linear forwards`;
+                    document.body.appendChild(balloon);
+                    
+                    // Remove balloon after animation completes
+                    setTimeout(() => {
+                        balloon.remove();
+                    }, 15000);
+                }
+            }
+            
+            // Function to create fireworks
+            function createFireworks() {
+                for (let i = 0; i < 30; i++) {
+                    setTimeout(() => {
+                        const x = Math.random() * window.innerWidth;
+                        const y = Math.random() * window.innerHeight / 2;
+                        
+                        const firework = document.createElement('div');
+                        firework.className = 'firework';
+                        firework.style.left = x + 'px';
+                        firework.style.top = y + 'px';
+                        firework.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                        firework.style.animation = `explode ${Math.random() * 1 + 0.5}s ease-out forwards`;
+                        document.body.appendChild(firework);
+                        
+                        // Remove firework after animation completes
+                        setTimeout(() => {
+                            firework.remove();
+                        }, 2000);
+                    }, i * 100);
+                }
+            }
+            
+            // Function to create emojis
+            function createEmojis() {
+                for (let i = 0; i < 20; i++) {
+                    const emoji = document.createElement('div');
+                    emoji.className = 'emoji';
+                    emoji.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                    emoji.style.left = Math.random() * 100 + 'vw';
+                    emoji.style.fontSize = (Math.random() * 2 + 1) + 'rem';
+                    emoji.style.animation = `float ${Math.random() * 8 + 4}s linear forwards`;
+                    document.body.appendChild(emoji);
+                    
+                    // Remove emoji after animation completes
+                    setTimeout(() => {
+                        emoji.remove();
+                    }, 12000);
+                }
+            }
+            
+            // Function to show messages
+            function showMessages() {
+                for (let i = 0; i < 10; i++) {
+                    setTimeout(() => {
+                        const message = document.createElement('div');
+                        message.className = 'message';
+                        message.textContent = messages[Math.floor(Math.random() * messages.length)];
+                        message.style.left = Math.random() * 80 + 10 + 'vw';
+                        message.style.top = Math.random() * 80 + 10 + 'vh';
+                        message.style.color = colors[Math.floor(Math.random() * colors.length)];
+                        message.style.animation = `fadeOut ${Math.random() * 2 + 1}s ease-in forwards`;
+                        document.body.appendChild(message);
+                        
+                        // Remove message after animation completes
+                        setTimeout(() => {
+                            message.remove();
+                        }, 3000);
+                    }, i * 300);
+                }
+            }
+            
+            // Function to trigger random effect
+            function triggerRandomEffect() {
+                updateCounter();
+                
+                // Randomly select an effect
+                const effects = [createConfetti, createBalloons, createFireworks, createEmojis, showMessages];
+                const randomEffect = effects[Math.floor(Math.random() * effects.length)];
+                
+                // Trigger the effect
+                randomEffect();
+                
+                // Often trigger multiple effects at once for more fun
+                if (Math.random() > 0.5) {
+                    const anotherEffect = effects[Math.floor(Math.random() * effects.length)];
+                    setTimeout(anotherEffect, 500);
+                }
+            }
+            
+            // Add event listeners to buttons
+            buttons.forEach(button => {
+                button.addEventListener('click', triggerRandomEffect);
+            });
+        });
+    </script>
+</body>
+</html>
+<!-- CI/CD Pipeline Test - Wed Aug 20 04:42:49 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-2 - Wed Aug 20 05:08:28 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-3 - Wed Aug 20 05:29:02 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-4 - Wed Aug 20 05:41:15 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-5 - Wed Aug 20 06:02:14 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-5.5 - Wed Aug 20 06:09:37 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-5.75 - Wed Aug 20 06:20:03 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-6 - Wed Aug 20 06:49:20 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-7 - Wed Aug 20 08:15:52 PM PKT 2025 -->
+<!-- CI/CD Pipeline Test-8 - Thu Aug 21 02:14:00 AM PKT 2025 -->
+<!-- CI/CD Pipeline Test-9 - Thu Aug 21 12:38:12 PM PKT 2025 -->
+<!-- CI/CD Pipeline Test-7 - Thu Aug 21 07:57:34 PM PKT 2025 -->
+<!-- CI/CD Pipeline Test without PAT - Thu Aug 21 08:09:30 PM PKT 2025 -->
+<!-- CI/CD Pipeline Test without PAT - Thu Aug 21 08:19:33 PM PKT 2025 -->
+<!-- CI/CD Pipeline Test without PAT - Thu Aug 21 08:22:50 PM PKT 2025 -->
+<!-- CI/CD Pipeline paralel Test without PAT - Thu Aug 21 08:29:26 PM PKT 2025 -->
+<!-- CI/CD Pipeline Test-10 - Fri Aug 22 12:38:54 AM PKT 2025 -->
+<!-- HTML CI/CD Test-Sat Aug 23 09:14:31 PM PKT 2025 -->
+<!-- HTML CI/CD Test-Sat Aug 23 09:15:25 PM PKT 2025 -->
+<!-- HTML CI/CD Test-Sat Aug 23 09:20:05 PM PKT 2025 -->
+<!-- HTML CI/CD Test-Sun Aug 24 03:04:15 PM PKT 2025 -->

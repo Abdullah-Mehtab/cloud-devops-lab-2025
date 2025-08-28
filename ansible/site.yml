@@ -34,12 +34,28 @@
         state: present
         executable: pip3
 
-    - name: Install Docker Compose
-      shell: |
-        curl -L "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        chmod +x /usr/local/bin/docker-compose
-      args:
-        creates: /usr/local/bin/docker-compose
+    - name: Create directory for Docker CLI plugins
+      file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: '0755'
+      become: yes
+
+    - name: Download Docker Compose plugin
+      get_url:
+        url: https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-linux-x86_64
+        dest: /usr/local/lib/docker/cli-plugins/docker-compose
+        mode: '0755'
+      become: yes
+
+    - name: Verify Docker Compose installation
+      command: docker compose version
+      register: compose_version
+      changed_when: false
+
+    - name: Display Docker Compose version
+      debug:
+        msg: "{{ compose_version.stdout }}"
 
     - name: Start and enable Docker service
       systemd:
@@ -89,10 +105,17 @@
     - name: Create devops user with pre-hashed password
       user:
         name: devops
-        password: "$6$A2dm6Oi8.tstSIH4$Z3bH02K7r9YJUsZJlfqiHl5MAsSbtr3fg1V0pM590DwZkILWRjbvP3/vbRKsHU.v6wbHdYEeavjuzXG8lcj26/a"
+        password: "{{ devops_password }}"
         groups: sudo,docker
         shell: /bin/bash
         append: yes
+
+    - name: Configure passwordless sudo for devops user
+      lineinfile:
+        path: /etc/sudoers
+        line: 'devops ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+        state: present
 
     - name: Add SSH key to devops user
       authorized_key:
