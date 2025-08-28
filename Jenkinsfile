@@ -69,13 +69,13 @@ pipeline {
                 }
             }
         }
+    } // End of stages
     
     post {
         always {
             sh 'docker system prune -f'
         }
         failure {
-            // Notify on failure (you can add Slack/email notifications here later)
             echo 'Pipeline failed!'
         }
         success {
