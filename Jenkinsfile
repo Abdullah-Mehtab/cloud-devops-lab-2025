@@ -1,91 +1,90 @@
 pipeline {
-    agent any
+    agent { label 'app-server' }
+
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        DOCKERHUB_USERNAME = 'abdullahmehtab'
+        DOCKER_DIR = "/home/devops/apps/docker"
+        PYTHON_APP_DIR = "/home/devops/apps/python-app"
+        HTML_APP_DIR = "/home/devops/apps/html-app"
     }
+
+    options {
+        // Keep only last 10 builds to save disk space
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        // Timeout pipeline if stuck
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
     stages {
+
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'main', url: 'git@github.com:your-org/your-repo.git'
             }
         }
 
-        stage('Build Applications') {
+        stage('Verify Docker & Compose') {
             steps {
-                script {
-                    // Build Python app from source
-                    dir('python-app') {
-                        docker.build("${DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID}", ".")
-                    }
+                sh '''
+                    echo "Docker version:"
+                    docker --version
+                    echo "Docker Compose version:"
+                    docker compose version
+                '''
+            }
+        }
 
-                    // Build HTML app from source
-                    dir('html-app') {
-                        docker.build("${DOCKERHUB_USERNAME}/my-html-app:${env.BUILD_ID}", ".")
-                    }
+        stage('Build & Deploy Stack') {
+            steps {
+                dir("${DOCKER_DIR}") {
+                    // Pull images with retry
+                    sh '''
+                        export COMPOSE_HTTP_TIMEOUT=300
+                        export DOCKER_CLIENT_TIMEOUT=300
+                        docker compose pull || true
+                    '''
+                    // Start stack with rebuild
+                    sh '''
+                        docker compose up -d --build
+                    '''
                 }
             }
         }
 
-        stage('Test') {
+        stage('Verify Containers') {
             steps {
-                script {
-                    // Run unit tests for Python app
-                    docker.image("${DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID}").inside {
-                        sh 'python -m pytest tests/ -v || true'  // continue even if tests fail
-                    }
+                sh '''
+                    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                '''
+            }
+        }
 
-                    // Linting for Python app
-                    sh 'pip install flake8 || true'
-                    sh 'flake8 python-app/app.py || true'
+        stage('Run Python App Tests') {
+            steps {
+                dir("${PYTHON_APP_DIR}") {
+                    sh '''
+                        pip3 install -r requirements.txt
+                        pytest tests/
+                    '''
                 }
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Echo HTML App Status') {
             steps {
-                script {
-                    echo "SonarQube analysis would run here"
-                    // Example Sonar scanner usage (if configured):
-                    // sh 'sonar-scanner -Dsonar.projectKey=my-python-app -Dsonar.sources=python-app -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=admin -Dsonar.password=admin'
+                dir("${HTML_APP_DIR}") {
+                    sh 'echo "HTML app deployed in ${HTML_APP_DIR}"'
                 }
             }
         }
 
-        stage('Push to DockerHub') {
-            steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
-                        // Push Python app
-                        docker.image("${DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID}").push()
-                        docker.image("${DOCKERHUB_USERNAME}/my-python-app:${env.BUILD_ID}").push("latest")
-
-                        // Push HTML app
-                        docker.image("${DOCKERHUB_USERNAME}/my-html-app:${env.BUILD_ID}").push()
-                        docker.image("${DOCKERHUB_USERNAME}/my-html-app:${env.BUILD_ID}").push("latest")
-                    }
-                }
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                script {
-                    // Use Ansible to deploy new versions
-                    ansiblePlaybook(
-                        playbook: 'ansible/deploy-app.yml',
-                        extras: "--extra-vars 'app_version=${env.BUILD_ID}'",
-                        inventory: 'ansible/inventory.ini'
-                    )
-                }
-            }
-        }
     }
 
     post {
-        always {
-            // Clean up Docker images and cache
-            sh 'docker system prune -f'
+        success {
+            echo "Deployment pipeline completed successfully on ${env.NODE_NAME}"
+        }
+        failure {
+            echo "Deployment failed on ${env.NODE_NAME}. Check logs!"
         }
     }
 }
