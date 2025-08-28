@@ -81,7 +81,7 @@
         sysctl_file: /etc/sysctl.conf
         reload: yes
       become: yes
-      
+
     - name: Ensure swap file exists (2GB)
       become: yes
       ansible.builtin.shell: |
@@ -187,3 +187,33 @@
     - name: Display container status
       debug:
         var: docker_ps.stdout
+
+    # --- NEW: Configure Jenkins Container ---
+    - name: Wait for Jenkins container to be healthy
+      wait_for:
+        path: /var/run/docker.sock
+        port: 8080
+        host: "{{ inventory_hostname }}"
+        delay: 10
+        timeout: 120
+      delegate_to: localhost
+
+    - name: Install Docker CLI in Jenkins container (confirmation)
+      shell: |
+        docker exec jenkins docker --version
+      register: jenkins_docker_check
+      changed_when: false
+      failed_when: jenkins_docker_check.rc != 0
+
+    - name: Install required tools in Jenkins container
+      shell: |
+        docker exec jenkins /bin/bash -c "
+          apt-get update &&
+          apt-get install -y ansible wget unzip &&
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip -O /tmp/sonar-scanner.zip &&
+          unzip /tmp/sonar-scanner.zip -d /opt &&
+          mv /opt/sonar-scanner-4.8.0.2856-linux /opt/sonar-scanner &&
+          ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner &&
+          rm /tmp/sonar-scanner.zip
+        "
+      when: jenkins_docker_check.rc == 0
