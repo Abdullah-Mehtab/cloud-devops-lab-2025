@@ -60,28 +60,44 @@ pipeline {
             }
         }
 
-        // Stage 6: Deploy application using Ansible
+        // Stage 6: Deploy application using Ansible (updated)
         stage('Deploy with Ansible') {
             steps {
                 withCredentials([string(credentialsId: 'ansible-vault-password', variable: 'VAULT_PASSWORD')]) {
-                    // Use triple double-quotes for variable expansion
                     sh """
-                        echo "$VAULT_PASSWORD" > /tmp/vault-pass.txt
-                        ansible-playbook ansible/deploy-app.yml \
+                        # Ensure SSH key has correct permissions
+                        chmod 600 /home/jenkins/.ssh/devopsproj || true
+
+                        # Test SSH connection to bastion
+                        echo "Testing SSH connection to bastion..."
+                        ssh -o StrictHostKeyChecking=no -i /home/jenkins/.ssh/devopsproj devops@13.61.153.223 "echo 'Bastion connection successful'"
+
+                        # Test SSH connection to app server through bastion (using ProxyCommand)
+                        echo "Testing SSH connection to app server through bastion..."
+                        ssh -o StrictHostKeyChecking=no -i /home/jenkins/.ssh/devopsproj -o ProxyCommand='ssh -W %h:%p -i /home/jenkins/.ssh/devopsproj devops@13.61.153.223' devops@10.0.2.168 "echo 'App server connection successful'"
+
+                        # Create temporary vault password file (secure it briefly)
+                        echo "${VAULT_PASSWORD}" > /tmp/vault-pass.txt
+                        chmod 600 /tmp/vault-pass.txt
+
+                        # Run Ansible with Jenkins-specific config
+                        ANSIBLE_CONFIG=ansible/ansible-jenkins.cfg ansible-playbook ansible/deploy-app.yml \
                             --extra-vars "app_version=${env.BUILD_ID}" \
                             --vault-password-file /tmp/vault-pass.txt \
                             -i ansible/inventory.ini
+
+                        # Cleanup temporary vault file
                         rm -f /tmp/vault-pass.txt
                     """
                 }
             }
         }
-    } // End of stages
+    } // end stages
 
     // Post actions for cleanup and notifications
     post {
         always {
-            sh 'docker system prune -f'
+            sh 'docker system prune -f || true'
         }
         failure {
             echo 'Pipeline failed!'
