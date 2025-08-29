@@ -188,3 +188,71 @@
       debug:
         var: docker_ps.stdout
 
+    - name: Wait for Jenkins container to be running
+      shell: |
+        until docker ps --filter "name=jenkins" --format "{{ '{{' }}.Names{{ '}}' }}" | grep -q "jenkins"; do
+          echo "Waiting for Jenkins container to start..."
+          sleep 5
+        done
+        echo "Jenkins container is running"
+      args:
+        executable: /bin/bash
+      register: wait_result
+      changed_when: false
+
+    - name: Check if tools are already installed
+      shell: |
+        docker exec jenkins which ansible && docker exec jenkins which sonar-scanner
+      args:
+        executable: /bin/bash
+      register: tools_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Install tools in Jenkins container (if not already installed)
+      shell: |
+        docker exec -u root jenkins /bin/bash -c "
+          # Update package list
+          apt-get update
+          
+          # Install basic tools
+          apt-get install -y ansible wget unzip
+          
+          # Download and install sonar-scanner in /usr/local instead of /opt
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip -O /tmp/sonar-scanner.zip
+          unzip /tmp/sonar-scanner.zip -d /usr/local
+          mv /usr/local/sonar-scanner-4.8.0.2856-linux /usr/local/sonar-scanner
+          ln -sf /usr/local/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner
+          rm /tmp/sonar-scanner.zip
+          
+          echo 'Tools installation completed successfully'
+        "
+      args:
+        executable: /bin/bash
+      when: tools_check.rc != 0
+
+    - name: Fix Docker permissions in Jenkins container
+      shell: |
+        docker exec -u root jenkins /bin/bash -c "
+          # Add jenkins user to docker group
+          groupadd -f -g 999 docker
+          usermod -aG docker jenkins
+          chmod 666 /var/run/docker.sock
+          echo 'Docker permissions fixed'
+        "
+      args:
+        executable: /bin/bash
+
+    - name: Verify tools installation
+      shell: |
+        docker exec jenkins ansible --version &&
+        docker exec jenkins sonar-scanner --version &&
+        docker exec jenkins docker --version
+      args:
+        executable: /bin/bash
+      register: verify_tools
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        msg: "{{ verify_tools.stdout }}"
